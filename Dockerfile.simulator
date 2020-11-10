@@ -1,0 +1,10 @@
+FROM node
+
+RUN apt-get update
+
+# https://github.com/smogon/pokemon-showdown/blob/master/sim/README.md
+RUN npm install pokemon-showdown
+
+# /node_modules/pokemon-showdown
+
+
