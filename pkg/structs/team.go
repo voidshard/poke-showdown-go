@@ -7,23 +7,21 @@ import (
 
 // Battlemon represents a pokemon with battle relevant stats, items, moves etc
 type Battlemon struct {
-	Name             string
-	Species          string
-	Item             string
-	Ability          string
-	Moves            []string // max len 4
-	Nature           string
-	EffortValues     *StatValues // 0-255
-	Gender           string
-	IndividualValues *StatValues // 0-31
-	Shiny            bool
-	Level            int // 1-100
-
-	// four bonus values whacked in at the end
-	Happiness    int
-	HPType       string
-	PokeballType string
-	GigantaMax   bool
+	Name             string      `json:"name"`
+	Species          string      `json:"species"`
+	Item             string      `json:"item"`
+	Ability          string      `json:"ability"`
+	Moves            []string    `json:"moves"` // max len 4
+	Nature           string      `json:"nature"`
+	EffortValues     *StatValues `json:"evs"`    // 0-255
+	Gender           string      `json:"gender"` // one of M F N
+	IndividualValues *StatValues `json:"ivs"`    // 0-31
+	Shiny            bool        `json:"shiny"`
+	Level            int         `json:"level"` // 1-100
+	Happiness        int         `json:"happiness"`
+	HPType           string      `json:"hpType"`
+	PokeballType     string      `json:"pokeball"`
+	GigantaMax       bool        `json:"gigantamax"`
 }
 
 // Pack a battlemon into the pokemon simulator format
@@ -79,10 +77,10 @@ func packbool(b bool, value string) string {
 
 // StatValues holds values for the 6 pokemon stats
 type StatValues struct {
-	HP             int
-	Attack         int
-	Defense        int
-	SpecialAttack  int
-	SpecialDefense int
-	Speed          int
+	HP             int `json:"hp"`
+	Attack         int `json:"atk"`
+	Defense        int `json:"def"`
+	SpecialAttack  int `json:"spa"`
+	SpecialDefense int `json:"spd"`
+	Speed          int `json:"spe"`
 }
