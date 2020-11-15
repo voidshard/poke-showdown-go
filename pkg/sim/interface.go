@@ -1,27 +1,17 @@
 package sim
 
 import (
-	"github.com/voidshard/pkg/structs"
+	"github.com/voidshard/poke-showdown-go/pkg/structs"
 )
 
-type Simulator interface {
-	Start(string, *BattleSpec) (Simulation, error)
+func Start(cmd string, spec *structs.BattleSpec) (Simulation, error) {
+	return NewSimV1(cmd, spec)
 }
 
 type Simulation interface {
-	Read() chan *Event
-	Write(*Action) error
-}
-
-type Action struct {
-	Player string
-}
-
-type Event struct {
-}
-
-type BattleSpec struct {
-	Format string
-
-	Players map[string]*structs.Battlemon
+	Read() <-chan *structs.BattleState
+	Messages() <-chan string
+	Errors() <-chan error
+	Write(*structs.Action) error
+	Close()
 }

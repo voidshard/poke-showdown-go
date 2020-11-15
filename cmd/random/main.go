@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-const human = "p1"
-
 type Game struct {
 	// battle simulation
 	battle sim.Simulation
@@ -20,66 +18,58 @@ type Game struct {
 
 func (g *Game) Run() {
 	for {
-		field := map[string]*structs.BattleUpdate{}
-		for evt := range g.battle.Read() {
-			if evt.Type == structs.EventSideUpdate {
-				field[evt.Player] = evt.Update
-				if len(field) == g.numPlayers {
-					break
-				}
+		select {
+		case msg := <-g.battle.Messages():
+			fmt.Println("msg:", msg)
+		case state := <-g.battle.Read():
+			if state.Error != "" {
+				fmt.Println("Error:", state.Error)
 			}
-			fmt.Println(evt, field)
-		}
 
-		printField(field)
+			if state.Winner != "" {
+				fmt.Println("Winner:", state.Winner)
+				return
+			}
 
-		acts := decideActions(field)
-		for _, act := range acts {
-			g.battle.Write(act)
+			printField(state.Field)
+
+			acts := []*structs.Action{}
+			for player, data := range state.Field {
+				if data.Wait {
+					continue
+				}
+				act := askUser(player)
+				acts = append(acts, act)
+			}
+
+			for _, act := range acts {
+				g.battle.Write(act)
+			}
+
 		}
 	}
+	fmt.Println("-End-")
 }
 
-func printField(field map[string]*structs.BattleUpdate) {
-	fmt.Println("---")
-	for player, side := range field {
+func printField(f map[string]*structs.Update) {
+	for player, update := range f {
+		fmt.Printf("Player: %s [wait:%v] [switch:%v]\n", player, update.Wait, update.ForceSwitch)
 		active := []structs.Pokemon{}
-
-		for i, pkm := range side.Team.Pokemon {
-			fmt.Printf("[%d] %s\n", i+1, pkm.Details)
+		for i, pkm := range update.Team.Pokemon {
 			if pkm.Active {
 				active = append(active, pkm)
 			}
+			fmt.Printf("    [%d] %s %s\n", i+1, pkm.Details, pkm.Condition)
 		}
 
+		fmt.Println("  [Active]")
 		for _, pkm := range active {
-			fmt.Println(player, pkm.Details, pkm.Condition)
-			fmt.Println(pkm.Item, pkm.Ability)
-			fmt.Println(pkm.Moves)
-			fmt.Println()
+			fmt.Printf("    %s %s %s %s %v\n", pkm.Details, pkm.Condition, pkm.Item, pkm.Ability, pkm.Moves)
 		}
 	}
 }
 
-func decideActions(field map[string]*structs.BattleUpdate) []*structs.Action {
-	acts := []*structs.Action{}
-	for player, data := range field {
-		if data.Wait {
-			continue
-		}
-		if len(data.ForceSwitch) > 0 {
-			fmt.Println("[switch]")
-			for i, pkm := range data.Team.Pokemon {
-				fmt.Printf("\t[%d] %s [%s %s %s] %v\n", i+1, pkm.Details, pkm.Condition, pkm.Item, pkm.Ability, pkm.Moves)
-			}
-		}
-		action := askPlayer(player)
-		acts = append(acts, action)
-	}
-	return acts
-}
-
-func askPlayer(player string) *structs.Action {
+func askUser(player string) *structs.Action {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print(player, " => ")
 	text, _ := reader.ReadString('\n')
@@ -114,17 +104,86 @@ func askPlayer(player string) *structs.Action {
 	return act
 }
 
-func main() {
-	// this is a quick hack to test run pokemon battles
+/*
+{"name":"Ninetales","species":"Ninetales","item":"heavydutyboots","ability":"drought","moves":["willowisp","nastyplot","fireblast","solarbeam"],"nature":"","evs":{"hp":85,"atk":0,"def":85,"spa":85,"spd":85,"spe":85},"ivs":{"hp":31,"atk":0,"def":31,"spa":31,"spd":31,"spe":31},"level":86}
 
-	spec := &structs.BattleSpec{
-		Format: "gen7randombattle",
+{"name":"Umbreon","species":"Umbreon","item":"leftovers","ability":"synchronize","moves":["protect","foulplay","wish","toxic"],"nature":"","evs":{"hp":85,"atk":85,"def":85,"spa":85,"spd":85,"spe":85},"level":84}
+*/
+
+var (
+	spec1v1 = &structs.BattleSpec{
+		Format: structs.FormatGen8,
 		Players: map[string][]*structs.PokemonSpec{
-			human: nil,
-			"p2":  nil,
+			"p1": []*structs.PokemonSpec{
+				&structs.PokemonSpec{
+					Name:    "Ninetales",
+					Item:    "heavydutyboots",
+					Ability: "drought",
+					Moves:   []string{"willowisp", "nastyplot", "fireblast", "solarbeam"},
+					Level:   50,
+				},
+			},
+			"p2": []*structs.PokemonSpec{
+				&structs.PokemonSpec{
+					Name:    "Umbreon",
+					Item:    "leftovers",
+					Ability: "synchronize",
+					Moves:   []string{"protect", "foulplay", "wish", "toxic"},
+					Level:   50,
+				},
+			},
 		},
 	}
 
+	/*
+		{"name":"Kommo-o","species":"Kommo-o","item":"throatspray","ability":"soundproof","moves":["closecombat","clangingscales","clangoroussoul","poisonjab"],"nature":"","evs":{"hp":85,"atk":85,"def":85,"spa":85,"spd":85,"spe":85},"level":80}
+		{"name":"Lugia","species":"Lugia","item":"heavydutyboots","ability":"multiscale","moves":["aeroblast","psyshock","calmmind","roost"],"nature":"","evs":{"hp":85,"atk":0,"def":85,"spa":85,"spd":85,"spe":85},"gender":"N","ivs":{"hp":31,"atk":0,"def":31,"spa":31,"spd":31,"spe":31},"level":72}
+	*/
+	spec2v2 = &structs.BattleSpec{
+		Format: structs.FormatGen8,
+		Players: map[string][]*structs.PokemonSpec{
+			"p1": []*structs.PokemonSpec{
+				&structs.PokemonSpec{
+					Name:    "Lugia",
+					Item:    "heavydutyboots",
+					Ability: "multiscale",
+					Moves:   []string{"aeroblast", "psyshock", "calmmind", "roost"},
+					Level:   5,
+				},
+				&structs.PokemonSpec{
+					Name:    "Ninetales",
+					Item:    "heavydutyboots",
+					Ability: "drought",
+					Moves:   []string{"willowisp", "nastyplot", "fireblast", "solarbeam"},
+					Level:   5,
+				},
+			},
+			"p2": []*structs.PokemonSpec{
+				&structs.PokemonSpec{
+					Name:    "Kommo-o",
+					Item:    "throatspray",
+					Ability: "soundproof",
+					Moves:   []string{"closecombat", "clangingscales", "clangoroussoul", "poisonjab"},
+					Level:   5,
+				},
+				&structs.PokemonSpec{
+					Name:    "Umbreon",
+					Item:    "leftovers",
+					Ability: "synchronize",
+					Moves:   []string{"protect", "foulplay", "wish", "toxic"},
+					Level:   5,
+				},
+			},
+		},
+	}
+)
+
+func main() {
+	launch(spec2v2)
+}
+
+func launch(spec *structs.BattleSpec) {
+	// this is a quick hack to test run pokemon battles
 	battle, err := sim.Start("pokemon-showdown", spec)
 	if err != nil {
 		panic(err)

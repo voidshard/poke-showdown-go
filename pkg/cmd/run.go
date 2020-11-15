@@ -1,15 +1,34 @@
 package cmd
 
 import (
+	"io"
+	"log"
+	"os"
 	"os/exec"
-	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
 
 const (
 	msgEnds = "\n\n"
+	fname   = "poke-showdown-go.log"
 )
+
+// lgr is a specific logger just to keep track of everything we read / write from / to
+// the pokemon showdown simulator.
+var lgr *log.Logger
+
+func init() {
+	name := filepath.Join(os.TempDir(), fname)
+
+	f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	lgr = log.New(f, "", log.LstdFlags)
+}
 
 func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<-chan string, <-chan string, <-chan error) {
 	// handler for the active command we'll be launching
@@ -40,6 +59,8 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 		defer cmdStderr.Close()
 		defer cmdStdIn.Close()
 
+		lgr.Printf("-----[begin]-----\n")
+
 		pumpsFinished := 0
 		for {
 			// the read pumps launched above handle reading from the active commands
@@ -54,6 +75,7 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 					continue
 				}
 
+				lgr.Printf("[write] %s\n", input)
 				_, err := cmdStdIn.Write([]byte(input))
 				if err != nil {
 					retErr <- err
@@ -96,7 +118,7 @@ func pump(src io.Reader, drain chan<- string, errs chan<- error, sep string) {
 	go func() {
 		soFar := ""
 		for {
-			buf := make([]byte, 1024)
+			buf := make([]byte, 2048)
 			_, err := src.Read(buf)
 
 			if err != nil {
@@ -107,10 +129,11 @@ func pump(src io.Reader, drain chan<- string, errs chan<- error, sep string) {
 				}
 			}
 
-			soFar += string(buf)
+			soFar += strings.Trim(string(buf), "\x00")
 
 			msgs, remaining := determineMsgs(soFar, sep)
 			for _, msg := range msgs {
+				lgr.Printf("[read] %s\n[remaining] %s\n", strings.ReplaceAll(msg, "\n", "\\n"), strings.ReplaceAll(remaining, "\n", "\\n"))
 				drain <- msg
 				soFar = remaining
 			}
