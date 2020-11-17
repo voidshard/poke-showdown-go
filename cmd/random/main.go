@@ -6,6 +6,7 @@ import (
 	"github.com/voidshard/poke-showdown-go/pkg/sim"
 	"github.com/voidshard/poke-showdown-go/pkg/structs"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -33,17 +34,20 @@ func (g *Game) Run() {
 
 			printField(state.Field)
 
-			acts := []*structs.Action{}
 			for player, data := range state.Field {
 				if data.Wait {
 					continue
 				}
-				act := askUser(player)
-				acts = append(acts, act)
-			}
 
-			for _, act := range acts {
-				g.battle.Write(act)
+				for {
+					act := askUser(player)
+					err := g.battle.Write(act)
+					if err == nil {
+						break
+					} else {
+						fmt.Printf("Err: %v\n", err)
+					}
+				}
 			}
 
 		}
@@ -52,9 +56,10 @@ func (g *Game) Run() {
 }
 
 func printField(f map[string]*structs.Update) {
+	fmt.Println("---")
 	for player, update := range f {
 		fmt.Printf("Player: %s [wait:%v] [switch:%v]\n", player, update.Wait, update.ForceSwitch)
-		active := []structs.Pokemon{}
+		active := []*structs.Pokemon{}
 		for i, pkm := range update.Team.Pokemon {
 			if pkm.Active {
 				active = append(active, pkm)
@@ -64,8 +69,19 @@ func printField(f map[string]*structs.Update) {
 
 		fmt.Println("  [Active]")
 		for _, pkm := range active {
-			fmt.Printf("    %s %s %s %s %v\n", pkm.Details, pkm.Condition, pkm.Item, pkm.Ability, pkm.Moves)
+			bonus := []string{}
+			if pkm.Options.CanDynamax {
+				bonus = append(bonus, "[max]")
+			}
+			if pkm.Options.CanMegaEvolve {
+				bonus = append(bonus, "[mega]")
+			}
+			if pkm.Options.CanZMove {
+				bonus = append(bonus, "[zmove]")
+			}
+			fmt.Printf("    %s %s %s %s %v %s\n", pkm.Details, pkm.Condition, pkm.Item, pkm.Ability, pkm.Moves, strings.Join(bonus, ""))
 		}
+		fmt.Println("")
 	}
 }
 
@@ -74,34 +90,56 @@ func askUser(player string) *structs.Action {
 	fmt.Print(player, " => ")
 	text, _ := reader.ReadString('\n')
 
-	bits := strings.Split(text, " ")
+	act := &structs.Action{Player: player, Specs: []*structs.ActionSpec{}}
+
+	bits := strings.Split(strings.TrimSpace(text), ",")
+	for _, b := range bits {
+		spec := parseSpec(b)
+		act.Specs = append(act.Specs, spec)
+	}
+
+	return act
+}
+
+func parseSpec(move string) *structs.ActionSpec {
+	bits := strings.Split(strings.TrimSpace(move), " ")
+
 	atype := structs.ActionMove
 	if bits[0] == "switch" {
 		atype = structs.ActionSwitch
 	}
 
-	act := &structs.Action{
-		Player: player,
-		Specs: []structs.ActionSpec{
-			structs.ActionSpec{
-				Type:  atype,
-				Value: bits[1],
-			},
-		},
+	id, err := strconv.ParseInt(bits[1], 10, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	spec := &structs.ActionSpec{
+		Type: atype,
+		ID:   int(id),
 	}
 
 	if len(bits) > 2 {
-		switch bits[2] {
+		id, err = strconv.ParseInt(bits[2], 10, 64)
+		if err != nil {
+			panic(err)
+		}
+
+		spec.Target = int(id)
+	}
+
+	if len(bits) > 3 {
+		switch bits[3] {
 		case "mega":
-			act.Specs[0].Mega = true
+			spec.Mega = true
 		case "zmove":
-			act.Specs[0].ZMove = true
+			spec.ZMove = true
 		case "max":
-			act.Specs[0].Max = true
+			spec.Max = true
 		}
 	}
 
-	return act
+	return spec
 }
 
 /*
@@ -194,14 +232,6 @@ func launch(spec *structs.BattleSpec) {
 		battle:     battle,
 		numPlayers: len(spec.Players),
 	}
-
-	go func() {
-		for err := range battle.Errors() {
-			if err != nil {
-				panic(err)
-			}
-		}
-	}()
 
 	game.Run()
 }
