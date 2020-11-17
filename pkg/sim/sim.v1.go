@@ -7,6 +7,7 @@ import (
 	"github.com/voidshard/poke-showdown-go/pkg/structs"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -19,10 +20,11 @@ type SimV1 struct {
 	stdin  chan string
 	ctrl   chan os.Signal
 
-	players []string
+	players          []string
+	unreadErrors     []error
+	unreadErrorsLock *sync.Mutex
 
 	// channels we supply the caller
-	allErrs  chan error
 	state    chan *structs.BattleState
 	messages chan string
 
@@ -35,7 +37,6 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 	ctrl := make(chan os.Signal)
 	state := make(chan *structs.BattleState)
 	messages := make(chan string)
-	allErrs := make(chan error)
 
 	stdout, stderr, errs := cmd.Run(
 		binary,
@@ -45,22 +46,25 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 	)
 
 	sim := &SimV1{
-		stdout:   stdout,
-		stderr:   stderr,
-		stdin:    stdin,
-		ctrl:     ctrl,
-		errors:   errs,
-		allErrs:  allErrs,
-		state:    state,
-		messages: messages,
-		players:  []string{},
+		stdout:           stdout,
+		stderr:           stderr,
+		stdin:            stdin,
+		ctrl:             ctrl,
+		errors:           errs,
+		state:            state,
+		messages:         messages,
+		players:          []string{},
+		unreadErrors:     []error{},
+		unreadErrorsLock: &sync.Mutex{},
 	}
 
 	go func() {
 		// pushes errors from command back to caller
 		// (We do this so we can add errors at this level too)
 		for err := range errs {
-			allErrs <- err
+			sim.unreadErrorsLock.Lock()
+			sim.unreadErrors = append(sim.unreadErrors, err)
+			sim.unreadErrorsLock.Unlock()
 		}
 	}()
 
@@ -114,10 +118,10 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 		// We sleep here to give the process time to absorb what we've said before
 		// pushing in more instructions.
 		// It only seems to be a problem with this action.
-		time.Sleep(time.Millisecond * 300)
+		time.Sleep(time.Millisecond * 100)
 	}
 
-	return sim, nil
+	return sim, sim.latestErrors()
 }
 
 //
@@ -132,7 +136,9 @@ func (s *SimV1) collateEvents() {
 	for message := range s.stdout {
 		msgs, err := parseMessage(message, state)
 		if err != nil {
-			s.allErrs <- err
+			s.unreadErrorsLock.Lock()
+			s.unreadErrors = append(s.unreadErrors, err)
+			s.unreadErrorsLock.Unlock()
 			continue
 		}
 		for _, msg := range msgs {
@@ -162,14 +168,13 @@ func parseMessage(raw string, state *structs.BattleState) ([]string, error) {
 				continue
 			}
 
-			update := &structs.Update{}
-			err := json.Unmarshal([]byte(encoded), update)
+			update, err := structs.DecodeUpdate([]byte(encoded))
 			if err != nil {
 				return msgs, err
 			}
 			state.Field[player] = update
 		} else if strings.HasPrefix(lines[i], "|error|") {
-			state.Error = lines[i]
+			return msgs, fmt.Errorf(strings.Replace(lines[i], "|error|", "", 1))
 		} else if strings.HasPrefix(lines[i], "|win|") {
 			bits := strings.Split(lines[i], "|")
 			state.Winner = bits[len(bits)-1]
@@ -185,7 +190,6 @@ func (s *SimV1) Close() {
 	defer close(s.stdin)
 	defer close(s.ctrl)
 	defer close(s.state)
-	defer close(s.allErrs)
 	s.ctrl <- syscall.SIGINT
 }
 
@@ -197,13 +201,29 @@ func (s *SimV1) Messages() <-chan string {
 	return s.messages
 }
 
-func (s *SimV1) Write(act *structs.Action) error {
-	// TODO: check validty of action
-	msg := act.Pack()
-	s.stdin <- msg
+func (s *SimV1) latestErrors() error {
+	s.unreadErrorsLock.Lock()
+	defer s.unreadErrorsLock.Unlock()
+
+	if len(s.unreadErrors) > 0 {
+		root := s.unreadErrors[0]
+
+		if len(s.unreadErrors) > 1 {
+			for _, err := range s.unreadErrors[1:] {
+				root = fmt.Errorf("%w: %w", root, err)
+			}
+		}
+
+		s.unreadErrors = []error{}
+		return root
+	}
+
 	return nil
 }
 
-func (s *SimV1) Errors() <-chan error {
-	return s.allErrs
+func (s *SimV1) Write(act *structs.Action) error {
+	msg := act.Pack()
+	s.stdin <- msg
+	time.Sleep(time.Millisecond * 100)
+	return s.latestErrors()
 }

@@ -9,6 +9,16 @@ const (
 	FormatGen8Doubles       Format = "[Gen 8] Doubles Ubers"
 )
 
+var isDoubles = map[Format]bool{
+	FormatGen8Doubles:       true,
+	FormatGen8DoublesRandom: true,
+}
+
+func IsDoubles(f Format) bool {
+	ok := isDoubles[f]
+	return ok
+}
+
 type BattleSpec struct {
 	Format Format
 

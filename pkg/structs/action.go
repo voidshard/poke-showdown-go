@@ -15,7 +15,7 @@ const (
 type Action struct {
 	Player string `json:"player"`
 
-	Specs []ActionSpec `json:"spec"`
+	Specs []*ActionSpec `json:"spec"`
 }
 
 type ActionSpec struct {
@@ -56,7 +56,7 @@ func (a *Action) Pack() string {
 	for _, spec := range a.Specs {
 		switch spec.Type {
 		case ActionMove:
-			lines = append(lines, fmt.Sprintf("move %s", packMove(&spec)))
+			lines = append(lines, fmt.Sprintf("move %s", packMove(spec)))
 		case ActionSwitch:
 			lines = append(lines, fmt.Sprintf("switch %d", spec.ID))
 		}
@@ -70,6 +70,11 @@ func packMove(a *ActionSpec) string {
 		return "pass"
 	}
 
+	target := ""
+	if a.Target != 0 {
+		target = fmt.Sprintf(" %d", a.Target)
+	}
+
 	// bonus options we can append to the end
 	bonus := ""
 	if a.Mega {
@@ -81,8 +86,9 @@ func packMove(a *ActionSpec) string {
 	}
 
 	return fmt.Sprintf(
-		"%d%s",
+		"%d%s%s",
 		a.ID,
+		target,
 		bonus,
 	)
 }

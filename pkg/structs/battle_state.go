@@ -13,10 +13,15 @@ type BattleState struct {
 	// Winning player if event type is 'end'
 	// Obviously implies battle is over
 	Winner string
+
+	// Extra messages for the caller
+	Messages []string
 }
 
-func NewBattleState() *structs.BattleState {
-	return &structs.BattleState{
-		Field: map[string]*structs.Update{},
+// NewBattleState returns a new empty BattleState
+func NewBattleState() *BattleState {
+	return &BattleState{
+		Field:    map[string]*Update{},
+		Messages: []string{},
 	}
 }

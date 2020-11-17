@@ -11,7 +11,6 @@ func Start(cmd string, spec *structs.BattleSpec) (Simulation, error) {
 type Simulation interface {
 	Read() <-chan *structs.BattleState
 	Messages() <-chan string
-	Errors() <-chan error
 	Write(*structs.Action) error
 	Close()
 }
