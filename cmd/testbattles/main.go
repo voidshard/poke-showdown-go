@@ -58,28 +58,38 @@ func (g *Game) Run() {
 func printField(f map[string]*structs.Update) {
 	fmt.Println("---")
 	for player, update := range f {
-		fmt.Printf("Player: %s [wait:%v] [switch:%v]\n", player, update.Wait, update.ForceSwitch)
+		fmt.Printf("Player: %s [wait:%v] [switch:%v] [active:%v]\n", player, update.Wait, update.ForceSwitch, update.Active)
 		active := []*structs.Pokemon{}
-		for i, pkm := range update.Team.Pokemon {
+		for i, pkm := range update.Pokemon {
 			if pkm.Active {
 				active = append(active, pkm)
 			}
-			fmt.Printf("    [%d] %s %s\n", i+1, pkm.Details, pkm.Condition)
+			fmt.Printf("    [%d] %s %s\n", i, pkm.Details, pkm.Condition)
 		}
 
 		fmt.Println("  [Active]")
 		for _, pkm := range active {
 			bonus := []string{}
-			if pkm.Options.CanDynamax {
-				bonus = append(bonus, "[max]")
-			}
-			if pkm.Options.CanMegaEvolve {
-				bonus = append(bonus, "[mega]")
-			}
-			if pkm.Options.CanZMove {
-				bonus = append(bonus, "[zmove]")
+			if pkm.Options != nil {
+				if pkm.Options.CanDynamax {
+					bonus = append(bonus, "[max]")
+				}
+				if pkm.Options.CanMegaEvolve {
+					bonus = append(bonus, "[mega]")
+				}
+				if pkm.Options.CanZMove {
+					bonus = append(bonus, "[zmove]")
+				}
 			}
 			fmt.Printf("    %s %s %s %s %v %s\n", pkm.Details, pkm.Condition, pkm.Item, pkm.Ability, pkm.Moves, strings.Join(bonus, ""))
+			fmt.Printf(
+				"        Atk:%d Def:%d Spa:%d Sde:%d Spe:%d\n",
+				pkm.Stats.Attack,
+				pkm.Stats.Defense,
+				pkm.Stats.SpecialAttack,
+				pkm.Stats.SpecialDefense,
+				pkm.Stats.Speed,
+			)
 		}
 		fmt.Println("")
 	}
@@ -142,12 +152,6 @@ func parseSpec(move string) *structs.ActionSpec {
 	return spec
 }
 
-/*
-{"name":"Ninetales","species":"Ninetales","item":"heavydutyboots","ability":"drought","moves":["willowisp","nastyplot","fireblast","solarbeam"],"nature":"","evs":{"hp":85,"atk":0,"def":85,"spa":85,"spd":85,"spe":85},"ivs":{"hp":31,"atk":0,"def":31,"spa":31,"spd":31,"spe":31},"level":86}
-
-{"name":"Umbreon","species":"Umbreon","item":"leftovers","ability":"synchronize","moves":["protect","foulplay","wish","toxic"],"nature":"","evs":{"hp":85,"atk":85,"def":85,"spa":85,"spd":85,"spe":85},"level":84}
-*/
-
 var (
 	spec1v1 = &structs.BattleSpec{
 		Format: structs.FormatGen8,
@@ -157,8 +161,10 @@ var (
 					Name:    "Ninetales",
 					Item:    "heavydutyboots",
 					Ability: "drought",
-					Moves:   []string{"willowisp", "nastyplot", "fireblast", "solarbeam"},
-					Level:   50,
+					//Moves:   []string{"willowisp", "nastyplot", "fireblast", "solarbeam"},
+					Moves:  []string{"willowisp", "spore", "substitute", "poisonpowder"},
+					Level:  50,
+					Gender: "M",
 				},
 			},
 			"p2": []*structs.PokemonSpec{
@@ -167,18 +173,40 @@ var (
 					Item:    "leftovers",
 					Ability: "synchronize",
 					Moves:   []string{"protect", "foulplay", "wish", "toxic"},
+					//Moves:  []string{"spore", "attract", "wish", "toxic"},
+					Level:  50,
+					Gender: "F",
+				},
+			},
+		},
+	}
+
+	spec1v1Mega = &structs.BattleSpec{
+		Format: structs.FormatGen8,
+		Players: map[string][]*structs.PokemonSpec{
+			"p1": []*structs.PokemonSpec{
+				&structs.PokemonSpec{
+					Name:    "zoroark",
+					Item:    "lifeorb",
+					Ability: "illusion",
+					Moves:   []string{"nastyplot", "darkpulse", "sludgebomb", "flamethrower"},
+					Level:   50,
+				},
+			},
+			"p2": []*structs.PokemonSpec{
+				&structs.PokemonSpec{
+					Name:    "gallade",
+					Item:    "galladite",
+					Ability: "justified",
+					Moves:   []string{"swordsdance", "closecombat", "zenheadbutt", "knockoff"},
 					Level:   50,
 				},
 			},
 		},
 	}
 
-	/*
-		{"name":"Kommo-o","species":"Kommo-o","item":"throatspray","ability":"soundproof","moves":["closecombat","clangingscales","clangoroussoul","poisonjab"],"nature":"","evs":{"hp":85,"atk":85,"def":85,"spa":85,"spd":85,"spe":85},"level":80}
-		{"name":"Lugia","species":"Lugia","item":"heavydutyboots","ability":"multiscale","moves":["aeroblast","psyshock","calmmind","roost"],"nature":"","evs":{"hp":85,"atk":0,"def":85,"spa":85,"spd":85,"spe":85},"gender":"N","ivs":{"hp":31,"atk":0,"def":31,"spa":31,"spd":31,"spe":31},"level":72}
-	*/
 	spec2v2 = &structs.BattleSpec{
-		Format: structs.FormatGen8,
+		Format: structs.FormatGen8Doubles,
 		Players: map[string][]*structs.PokemonSpec{
 			"p1": []*structs.PokemonSpec{
 				&structs.PokemonSpec{
@@ -198,10 +226,10 @@ var (
 			},
 			"p2": []*structs.PokemonSpec{
 				&structs.PokemonSpec{
-					Name:    "Kommo-o",
-					Item:    "throatspray",
-					Ability: "soundproof",
-					Moves:   []string{"closecombat", "clangingscales", "clangoroussoul", "poisonjab"},
+					Name:    "zoroark",
+					Item:    "lifeorb",
+					Ability: "illusion",
+					Moves:   []string{"nastyplot", "darkpulse", "sludgebomb", "flamethrower"},
 					Level:   5,
 				},
 				&structs.PokemonSpec{
@@ -214,10 +242,15 @@ var (
 			},
 		},
 	}
+
+	spec2v2Singles = &structs.BattleSpec{
+		Format:  structs.FormatGen8,
+		Players: spec2v2.Players,
+	}
 )
 
 func main() {
-	launch(spec2v2)
+	launch(spec1v1)
 }
 
 func launch(spec *structs.BattleSpec) {

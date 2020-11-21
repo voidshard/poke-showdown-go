@@ -5,31 +5,17 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 )
 
 const (
+	// pokemon-showdown ends unique messages with \n\n
 	msgEnds = "\n\n"
-	fname   = "poke-showdown-go.log"
 )
 
-// lgr is a specific logger just to keep track of everything we read / write from / to
-// the pokemon showdown simulator.
-var lgr *log.Logger
-
-func init() {
-	name := filepath.Join(os.TempDir(), fname)
-
-	f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		panic(err)
-	}
-
-	lgr = log.New(f, "", log.LstdFlags)
-}
-
+// Run kicks off an interactive command.
+// New messages from stdout / stderr are returned as they are read from the process.
 func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<-chan string, <-chan string, <-chan error) {
 	// handler for the active command we'll be launching
 	active := exec.Command(cmd, args...)
@@ -59,8 +45,6 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 		defer cmdStderr.Close()
 		defer cmdStdIn.Close()
 
-		lgr.Printf("-----[begin]-----\n")
-
 		pumpsFinished := 0
 		for {
 			// the read pumps launched above handle reading from the active commands
@@ -75,7 +59,7 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 					continue
 				}
 
-				lgr.Printf("[write] %s\n", input)
+				log.Printf("[write] %s\n", input)
 				_, err := cmdStdIn.Write([]byte(input))
 				if err != nil {
 					retErr <- err
@@ -104,6 +88,9 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 	return retStdout, retStderr, retErr
 }
 
+// determineMsgs breaks a long string (potentially many messages) into message
+// chunks. Any remaining chunks are returned as is incase they're partial
+// messages.
 func determineMsgs(in, sep string) ([]string, string) {
 	bits := strings.Split(in, sep)
 
@@ -114,6 +101,8 @@ func determineMsgs(in, sep string) ([]string, string) {
 	return bits[0 : len(bits)-1], bits[len(bits)-1]
 }
 
+// pump continuously reads from the given read and writes messages into the given
+// drain channel. Messages are split by `sep`
 func pump(src io.Reader, drain chan<- string, errs chan<- error, sep string) {
 	go func() {
 		soFar := ""
@@ -133,7 +122,12 @@ func pump(src io.Reader, drain chan<- string, errs chan<- error, sep string) {
 
 			msgs, remaining := determineMsgs(soFar, sep)
 			for _, msg := range msgs {
-				lgr.Printf("[read] %s\n[remaining] %s\n", strings.ReplaceAll(msg, "\n", "\\n"), strings.ReplaceAll(remaining, "\n", "\\n"))
+				log.Printf(
+					"[read (%d/%d)] %s\n",
+					len(msg),
+					len(remaining)+len(msg),
+					strings.ReplaceAll(msg, "\n", ""),
+				)
 				drain <- msg
 				soFar = remaining
 			}

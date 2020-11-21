@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// SimV1 is our struct for maintaining communication & parsing of an active battle
+// simulation process.
 type SimV1 struct {
 	// internal channels
 	stdout <-chan string
@@ -20,7 +22,10 @@ type SimV1 struct {
 	stdin  chan string
 	ctrl   chan os.Signal
 
-	players          []string
+	players []string
+
+	// so that we can return errors synchronously from our async read / writing we
+	// buffer errors here after calling Write() to return them.
 	unreadErrors     []error
 	unreadErrorsLock *sync.Mutex
 
@@ -32,6 +37,7 @@ type SimV1 struct {
 	latest *structs.BattleState
 }
 
+// NewSimV1 creates and launches a new simulation with the given Spec setup.
 func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 	stdin := make(chan string)
 	ctrl := make(chan os.Signal)
@@ -59,8 +65,7 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 	}
 
 	go func() {
-		// pushes errors from command back to caller
-		// (We do this so we can add errors at this level too)
+		// roll up errors into our buffer
 		for err := range errs {
 			sim.unreadErrorsLock.Lock()
 			sim.unreadErrors = append(sim.unreadErrors, err)
@@ -68,6 +73,7 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 		}
 	}()
 
+	// collateEvents & parse messages the simulator is writing back to us
 	go sim.collateEvents()
 
 	// pushes in initial stdin to kick off battle
@@ -110,6 +116,8 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 		orders = append(orders, fmt.Sprintf(">%s team %s\n", player, strings.Join(members, ",")))
 	}
 
+	// #3 we now need to tell the simulator what order the player's team should
+	// be in (ie, battle order).
 	for _, order := range orders {
 		stdin <- order
 		// Nb. for some reason if we push these in too quickly pokemon-showdown
@@ -124,7 +132,8 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 	return sim, sim.latestErrors()
 }
 
-//
+// collateEvents reads and parses relevant messages together to discover messages &
+// battle updates.
 func (s *SimV1) collateEvents() {
 	// pokemon-showdown streams events as messages, this is cool, but really
 	// we want to amass all these into "here is the state of play now"
@@ -152,6 +161,8 @@ func (s *SimV1) collateEvents() {
 	}
 }
 
+// parseMessage parses some message (a multi line string) into message types we
+// care about.
 func parseMessage(raw string, state *structs.BattleState) ([]string, error) {
 	msgs := []string{}
 
@@ -174,6 +185,11 @@ func parseMessage(raw string, state *structs.BattleState) ([]string, error) {
 			}
 			state.Field[player] = update
 		} else if strings.HasPrefix(lines[i], "|error|") {
+			if strings.Contains(lines[i], "Can't choose for Team Preview") {
+				// message indicates we gave a team preview for
+				// a non-preview battle. Has no effect.
+				continue
+			}
 			return msgs, fmt.Errorf(strings.Replace(lines[i], "|error|", "", 1))
 		} else if strings.HasPrefix(lines[i], "|win|") {
 			bits := strings.Split(lines[i], "|")
@@ -186,6 +202,7 @@ func parseMessage(raw string, state *structs.BattleState) ([]string, error) {
 	return msgs, nil
 }
 
+// Close stops the simulator and kills all our channels.
 func (s *SimV1) Close() {
 	defer close(s.stdin)
 	defer close(s.ctrl)
@@ -193,14 +210,20 @@ func (s *SimV1) Close() {
 	s.ctrl <- syscall.SIGINT
 }
 
+// Read returns a read-only channel for getting new BattleState structs as they are
+// written out.
 func (s *SimV1) Read() <-chan *structs.BattleState {
 	return s.state
 }
 
+// Messages returns a read-only chan for reading messages from the simulator
+// (non-error, non-state changes).
+// Ie. "it is now sunny", "move x from y missed"
 func (s *SimV1) Messages() <-chan string {
 	return s.messages
 }
 
+// latestErrors returns errors from our errors buffer to the user (if any).
 func (s *SimV1) latestErrors() error {
 	s.unreadErrorsLock.Lock()
 	defer s.unreadErrorsLock.Unlock()
@@ -221,6 +244,8 @@ func (s *SimV1) latestErrors() error {
 	return nil
 }
 
+// Write writes one player decision(s) for their pokemon (1 or more) to
+// the simulator.
 func (s *SimV1) Write(act *structs.Action) error {
 	msg := act.Pack()
 	s.stdin <- msg

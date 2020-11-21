@@ -5,19 +5,29 @@ import (
 	"strings"
 )
 
+// ActionType is a user choice (move / switch)
 type ActionType string
 
 const (
-	ActionMove   ActionType = "move"
+	// ActionMove indicates the pokemon wishes to use an attack / status move
+	ActionMove ActionType = "move"
+
+	// ActionSwitch indicates the user wishes to switch out a pokemon to another
+	// team member
 	ActionSwitch ActionType = "switch"
 )
 
+// Action is a list of ActionSpecs (in order of the user pokemon)
 type Action struct {
+	// Player making the choices
 	Player string `json:"player"`
 
+	// Specs is the details of the decision for each pokemon the player
+	// has in the battle
 	Specs []*ActionSpec `json:"spec"`
 }
 
+// ActionSpec is the desired action details for a single pokemon
 type ActionSpec struct {
 	// move or switch
 	Type ActionType `json:"type"`
@@ -29,6 +39,7 @@ type ActionSpec struct {
 	ID int `json:"id"`
 
 	// Indicates target pokemon
+	// To specify this on a non-targeting or self targeting move is invalid.
 	Target int `json:"target"`
 	// Singles:
 	// Not used
@@ -51,6 +62,7 @@ type ActionSpec struct {
 	Max   bool `json:"max"`
 }
 
+// Pack represents this action as a showdown simulator compliant string
 func (a *Action) Pack() string {
 	lines := []string{}
 	for _, spec := range a.Specs {
@@ -58,12 +70,14 @@ func (a *Action) Pack() string {
 		case ActionMove:
 			lines = append(lines, fmt.Sprintf("move %s", packMove(spec)))
 		case ActionSwitch:
-			lines = append(lines, fmt.Sprintf("switch %d", spec.ID))
+			// showdown switch indexes start from 1
+			lines = append(lines, fmt.Sprintf("switch %d", spec.ID+1))
 		}
 	}
 	return fmt.Sprintf(">%s %s\n", a.Player, strings.Join(lines, ","))
 }
 
+// packMove packs a piece of an action into a showdown style movespec
 func packMove(a *ActionSpec) string {
 	// no move is required
 	if a.Pass {
@@ -87,7 +101,7 @@ func packMove(a *ActionSpec) string {
 
 	return fmt.Sprintf(
 		"%d%s%s",
-		a.ID,
+		a.ID+1, // showdown move indexes start from 1
 		target,
 		bonus,
 	)
