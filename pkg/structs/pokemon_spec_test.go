@@ -2,9 +2,30 @@ package structs
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+func TestPackBool(t *testing.T) {
+	defVal := "value"
+
+	cases := []struct {
+		Given  bool
+		Expect string
+	}{
+		{true, defVal},
+		{false, ""},
+	}
+
+	for i, tt := range cases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			result := packbool(tt.Given, defVal)
+
+			assert.Equal(t, tt.Expect, result)
+		})
+	}
+}
 
 const packedTeam = `Musharna||leftovers|synchronize|calmmind,moonlight,moonblast,psychic||85,0,85,85,85,85||31,0,31,31,31,31||88|0,,,]Lycanroc|lycanrocdusk|lifeorb|toughclaws|swordsdance,closecombat,psychicfangs,stoneedge||85,85,85,85,85,85||31,31,31,31,31,31||82|0,,,]Skuntank||lifeorb|aftermath|suckerpunch,fireblast,toxic,crunch||85,85,85,85,85,85||31,31,31,31,31,31||86|0,,,]Terrakion||choiceband|justified|earthquake,stoneedge,quickattack,closecombat||85,85,85,85,85,85|N|31,31,31,31,31,31||82|0,,,]Persian|persianalola|lifeorb|furcoat|nastyplot,powergem,thunderbolt,darkpulse||85,0,85,85,85,85||31,0,31,31,31,31||86|0,,,]Genesect||lifeorb|download|shiftgear,icebeam,thunderbolt,ironhead||85,85,85,85,85,85|N|31,31,31,31,31,31||76|0,,,`
 

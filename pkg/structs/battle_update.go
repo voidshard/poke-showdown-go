@@ -158,6 +158,20 @@ type Pokemon struct {
 	Details string `json:"details"`
 }
 
+func (p *Pokemon) Level() (int, error) {
+	bits := strings.Split(p.Details, ", ")
+	if len(bits) != 3 {
+		return -1, fmt.Errorf("unable to parse level: %s", p.Details)
+	}
+	lvl, err := strconv.ParseInt(bits[1][1:], 10, 64)
+	return int(lvl), err
+}
+
+func (p *Pokemon) Species() string {
+	bits := strings.Split(p.Details, ", ")
+	return bits[0]
+}
+
 // IsAsleep returns if the pokemon is asleep
 func (p *Pokemon) IsAsleep() bool {
 	return strings.Contains(p.Condition, " slp")
@@ -267,7 +281,6 @@ func (a *activeData) moveHash() string {
 // rawTeam represents an entire pokemon team.
 // Nb. order here is important.
 type rawTeam struct {
-	Name    string     `json:"name"`
-	Player  string     `json:"player"`
+	Player  string     `json:"name"`
 	Pokemon []*Pokemon `json:"pokemon"`
 }

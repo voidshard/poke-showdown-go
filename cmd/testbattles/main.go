@@ -161,10 +161,9 @@ var (
 					Name:    "Ninetales",
 					Item:    "heavydutyboots",
 					Ability: "drought",
-					//Moves:   []string{"willowisp", "nastyplot", "fireblast", "solarbeam"},
-					Moves:  []string{"willowisp", "spore", "substitute", "poisonpowder"},
-					Level:  50,
-					Gender: "M",
+					Moves:   []string{"willowisp", "nastyplot", "fireblast", "solarbeam"},
+					Level:   50,
+					Gender:  "M",
 				},
 			},
 			"p2": []*structs.PokemonSpec{
@@ -173,9 +172,8 @@ var (
 					Item:    "leftovers",
 					Ability: "synchronize",
 					Moves:   []string{"protect", "foulplay", "wish", "toxic"},
-					//Moves:  []string{"spore", "attract", "wish", "toxic"},
-					Level:  50,
-					Gender: "F",
+					Level:   50,
+					Gender:  "F",
 				},
 			},
 		},
@@ -250,7 +248,7 @@ var (
 )
 
 func main() {
-	launch(spec1v1)
+	launch(spec2v2Singles)
 }
 
 func launch(spec *structs.BattleSpec) {
@@ -259,7 +257,7 @@ func launch(spec *structs.BattleSpec) {
 	if err != nil {
 		panic(err)
 	}
-	defer battle.Close()
+	defer battle.Stop()
 
 	game := &Game{
 		battle:     battle,

@@ -23,6 +23,6 @@ type Simulation interface {
 	// new turn can happen -- which results in another BattleState
 	Write(*structs.Action) error
 
-	// Close stops the battle and closes running processes
-	Close()
+	// Stop stops the battle and closes running processes
+	Stop()
 }

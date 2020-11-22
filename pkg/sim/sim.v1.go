@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+var (
+	// indirection allows for easier testing
+	runCommand = cmd.Run
+)
+
 // SimV1 is our struct for maintaining communication & parsing of an active battle
 // simulation process.
 type SimV1 struct {
@@ -44,7 +49,7 @@ func NewSimV1(binary string, spec *structs.BattleSpec) (Simulation, error) {
 	state := make(chan *structs.BattleState)
 	messages := make(chan string)
 
-	stdout, stderr, errs := cmd.Run(
+	stdout, stderr, errs := runCommand(
 		binary,
 		[]string{"simulate-battle"},
 		stdin,
@@ -195,7 +200,9 @@ func parseMessage(raw string, state *structs.BattleState) ([]string, error) {
 			bits := strings.Split(lines[i], "|")
 			state.Winner = bits[len(bits)-1]
 		} else if strings.HasPrefix(lines[i], "|") {
-			msgs = append(msgs, lines[i])
+			if strings.Count(lines[i], "|") > 1 {
+				msgs = append(msgs, lines[i])
+			}
 		}
 	}
 
@@ -203,7 +210,7 @@ func parseMessage(raw string, state *structs.BattleState) ([]string, error) {
 }
 
 // Close stops the simulator and kills all our channels.
-func (s *SimV1) Close() {
+func (s *SimV1) Stop() {
 	defer close(s.stdin)
 	defer close(s.ctrl)
 	defer close(s.state)
@@ -233,7 +240,7 @@ func (s *SimV1) latestErrors() error {
 
 		if len(s.unreadErrors) > 1 {
 			for _, err := range s.unreadErrors[1:] {
-				root = fmt.Errorf("%w: %w", root, err)
+				root = fmt.Errorf("%s: %w", root.Error(), err)
 			}
 		}
 
