@@ -156,7 +156,7 @@ func (s *SimV1) collateEvents() {
 			continue
 		}
 		for _, msg := range msgs {
-			s.messages <- msg
+			state.Messages = append(state.Messages, msg)
 		}
 		if state.Winner != "" || len(state.Field) == len(s.players) {
 			s.latest = state
@@ -221,13 +221,6 @@ func (s *SimV1) Stop() {
 // written out.
 func (s *SimV1) Read() <-chan *structs.BattleState {
 	return s.state
-}
-
-// Messages returns a read-only chan for reading messages from the simulator
-// (non-error, non-state changes).
-// Ie. "it is now sunny", "move x from y missed"
-func (s *SimV1) Messages() <-chan string {
-	return s.messages
 }
 
 // latestErrors returns errors from our errors buffer to the user (if any).

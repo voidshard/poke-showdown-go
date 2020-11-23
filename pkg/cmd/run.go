@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -59,7 +58,6 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 					continue
 				}
 
-				log.Printf("[write] %s\n", input)
 				_, err := cmdStdIn.Write([]byte(input))
 				if err != nil {
 					retErr <- err
@@ -122,12 +120,6 @@ func pump(src io.Reader, drain chan<- string, errs chan<- error, sep string) {
 
 			msgs, remaining := determineMsgs(soFar, sep)
 			for _, msg := range msgs {
-				log.Printf(
-					"[read (%d/%d)] %s\n",
-					len(msg),
-					len(remaining)+len(msg),
-					strings.ReplaceAll(msg, "\n", ""),
-				)
 				drain <- msg
 				soFar = remaining
 			}

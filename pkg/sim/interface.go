@@ -15,9 +15,6 @@ type Simulation interface {
 	// become available.
 	Read() <-chan *structs.BattleState
 
-	// Messages returns any non-error non-state update information
-	Messages() <-chan string
-
 	// Write commits a player choice to the engine. Note that a choice must
 	// be made for each player (unless they explicitly do not need to) before a
 	// new turn can happen -- which results in another BattleState

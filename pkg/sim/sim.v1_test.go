@@ -52,13 +52,6 @@ func TestCollateEvents(t *testing.T) {
 		close(out)
 	}()
 
-	msgs := []string{}
-	go func() {
-		for msg := range sv1.Messages() {
-			msgs = append(msgs, msg)
-		}
-	}()
-
 	go sv1.collateEvents()
 
 	st := <-sv1.state
@@ -66,7 +59,7 @@ func TestCollateEvents(t *testing.T) {
 	assert.Equal(t, st.Field["p1"].Pokemon[0].Species(), "Ninetales")
 	assert.Equal(t, st.Field["p2"].Pokemon[0].Species(), "Umbreon")
 
-	assert.Equal(t, []string{"|-event|something happened"}, msgs)
+	assert.Equal(t, []string{"|-event|something happened"}, st.Messages)
 	assert.Equal(t, 1, len(sv1.unreadErrors))
 }
 
