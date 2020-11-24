@@ -52,6 +52,19 @@ func DecodeUpdate(data []byte) (*Update, error) {
 			continue
 		}
 
+		curHP, maxHP, err := pkm.parseHP()
+		if err != nil {
+			return nil, err
+		}
+		pkm.HPNow = curHP
+		pkm.HPMax = maxHP
+
+		lvl, err := pkm.parseLevel()
+		if err != nil {
+			return nil, err
+		}
+		pkm.Level = lvl
+
 		key := pkm.moveHash()
 		var rawOpts *activeData
 		for _, i := range raw.Active { // is a list 1-2 pokemon long
@@ -153,12 +166,21 @@ type Pokemon struct {
 	// ie. HP/MaxHap status1 status2
 	Condition string `json:"condition"`
 
+	// HPNow is the pokemons current HP
+	HPNow int
+
+	// HPMax is the pokemons full HP (if known)
+	HPMax int
+
+	// Level is the pokemons current level
+	Level int
+
 	// Name, Level, Gender run together with ','
 	// ie. Chesnaught, L82, M
 	Details string `json:"details"`
 }
 
-func (p *Pokemon) Level() (int, error) {
+func (p *Pokemon) parseLevel() (int, error) {
 	bits := strings.Split(p.Details, ", ")
 	if len(bits) != 3 {
 		return -1, fmt.Errorf("unable to parse level: %s", p.Details)
@@ -208,7 +230,7 @@ func (p *Pokemon) IsToxiced() bool {
 // - max hp (if known)
 // Or returns an error.
 // Note that if the pokemon has fainted we no longer know the max HP :(
-func (p *Pokemon) HP() (int, int, error) {
+func (p *Pokemon) parseHP() (int, int, error) {
 	bits := strings.SplitN(p.Condition, " ", 2)
 
 	if bits[0] == "0" {

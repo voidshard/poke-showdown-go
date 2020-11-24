@@ -4,11 +4,9 @@ import ()
 
 // BattleState is the current state of the entire battle (for all players).
 type BattleState struct {
-	// update represents some change to the current battle
+	// Field is a map of player -> Update that details the current state
+	// of the given players field.
 	Field map[string]*Update
-
-	// an error was encountered
-	Error string
 
 	// Winning player if event type is 'end'
 	// Obviously implies battle is over

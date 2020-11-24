@@ -19,7 +19,7 @@ func TestHP(t *testing.T) {
 
 	for i, tt := range cases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			cur, max, err := (&Pokemon{Condition: tt.Condition}).HP()
+			cur, max, err := (&Pokemon{Condition: tt.Condition}).parseHP()
 
 			assert.Nil(t, err)
 			assert.Equal(t, tt.Current, cur)
@@ -94,7 +94,7 @@ func TestPokemonLevel(t *testing.T) {
 
 	for i, tt := range cases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result, err := (&Pokemon{Details: tt.Given}).Level()
+			result, err := (&Pokemon{Details: tt.Given}).parseLevel()
 
 			assert.Nil(t, err)
 			assert.Equal(t, tt.Expect, result)
