@@ -6,7 +6,7 @@ import (
 
 // Start kicks off a new simulation with the given battle spec
 func Start(cmd string, spec *structs.BattleSpec) (Simulation, error) {
-	return NewSimV1(cmd, spec)
+	return NewSimV3(cmd, spec)
 }
 
 // Simulation represents an interface to the battle-simulator

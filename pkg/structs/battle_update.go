@@ -182,7 +182,7 @@ type Pokemon struct {
 
 func (p *Pokemon) parseLevel() (int, error) {
 	bits := strings.Split(p.Details, ", ")
-	if len(bits) != 3 {
+	if len(bits) <= 1 {
 		return -1, fmt.Errorf("unable to parse level: %s", p.Details)
 	}
 	lvl, err := strconv.ParseInt(bits[1][1:], 10, 64)
