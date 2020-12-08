@@ -120,5 +120,5 @@ Once every player that needs to has called [write](https://github.com/voidshard/
 
 ### TODO
 
-- According to the [docs](https://github.com/smogon/pokemon-showdown/blob/master/sim/SIM-PROTOCOL.md#possible-choices) various messages should be emitted by the simulator as it runs detailing what pokemon used what move, the result, various upkeep steps ("it is raining") etc. This doesn't seem to happen. Still investigating.
-
+- parse battle update messages ("it is sunny", "pokemon used move") into event structs
+- fix tests after some internal reworking
