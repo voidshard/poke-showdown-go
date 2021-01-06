@@ -11,15 +11,13 @@ func Start(cmd string, spec *structs.BattleSpec) (Simulation, error) {
 
 // Simulation represents an interface to the battle-simulator
 type Simulation interface {
-	// Read returns BattleState (turn updates for each side in battle) as they
-	// become available.
-	Read() <-chan *structs.BattleState
+	// Turn triggers a new turn. An action is required for each player in the
+	// battle simulation.
+	Turn([]*structs.Action) (*structs.BattleState, error)
 
-	// Write commits a player choice to the engine. Note that a choice must
-	// be made for each player (unless they explicitly do not need to) before a
-	// new turn can happen -- which results in another BattleState
-	Write(*structs.Action) error
+	//
+	State() *structs.BattleState
 
-	// Stop stops the battle and closes running processes
+	// Stop the battle and closes running processes
 	Stop()
 }

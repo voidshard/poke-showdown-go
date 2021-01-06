@@ -13,9 +13,26 @@ const (
 	msgEnds = "\n\n"
 )
 
+type Option func(*config)
+
+type config struct {
+	Sep string
+}
+
+func Seperator(s string) Option {
+	return func(c *config) {
+		c.Sep = s
+	}
+}
+
 // Run kicks off an interactive command.
 // New messages from stdout / stderr are returned as they are read from the process.
-func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<-chan string, <-chan string, <-chan error) {
+func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal, opts ...Option) (<-chan string, <-chan string, <-chan error) {
+	cfg := &config{Sep: msgEnds}
+	for _, o := range opts {
+		o(cfg)
+	}
+
 	// handler for the active command we'll be launching
 	active := exec.Command(cmd, args...)
 
@@ -32,7 +49,7 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal) (<
 
 	// an error chan & helper func to kick off read pumps for stderr & stdout
 	pumpErrs := make(chan error)
-	pump(cmdStdout, retStdout, pumpErrs, msgEnds) // messages divided by \n\n
+	pump(cmdStdout, retStdout, pumpErrs, cfg.Sep) // messages divided by \n\n
 	pump(cmdStderr, retStderr, pumpErrs, "\n")    // return any error lines
 
 	go func() {

@@ -21,15 +21,17 @@ This library provides a Golang interface for interacting with the pokemon-showdo
 
 In addition to the library itself you'll need to install [the engine](https://github.com/smogon/pokemon-showdown/blob/master/sim/README.md). Anecdotally this seems to require a fairly recent version of [NodeJS](https://nodejs.org/en/download/) to be available (this lib was built using v14.15.0). 
 
+You'll need to make sure the Pokemon-Showdown JS lib is version [0.11.4](https://github.com/smogon/pokemon-showdown/commit/baaeb1e23bd1d59e7690568e36da510bfa540d03)+. 
+
 
 ### Example
 
 Here we set up a BattleSpec that outlines
 - the format of the battle (Gen8 singles)
-- the player(s) (p1 & p2)
+- the players' teams
 - a team of one pokemon for each player (Ninetales vs Umbreon)
 
-Note that most fields that are not set on a PokemonSpec will be set to standard values by the simulator itself. Have a look at the [spec](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/pokemon_spec.go) to see what values you can configure.
+Note that most fields that are not set on a PokemonSpec will be set to standard values by the simulator itself. Have a look at the [spec](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/pokemon_spec.go) to see what values you can configure. The tl;dr is; the pokemon seem to get the best possible values if not configured - IVs will be 31, happiness 255, level 100 etc.
 
 ```golang
 import (
@@ -39,8 +41,8 @@ import (
 
 var spec = &structs.BattleSpec{
 	Format: structs.FormatGen8,
-	Players: map[string][]*structs.PokemonSpec{
-		"p1": []*structs.PokemonSpec{
+	Players: [][]*structs.PokemonSpec{
+		[]*structs.PokemonSpec{
 			&structs.PokemonSpec{
 				Name:    "Ninetales",
 				Item:    "heavydutyboots",
@@ -54,7 +56,7 @@ var spec = &structs.BattleSpec{
 				Level:   50,
 			},
 		},
-		"p2": []*structs.PokemonSpec{
+		[]*structs.PokemonSpec{
 			&structs.PokemonSpec{
 				Name:    "Umbreon",
 				Item:    "leftovers",
@@ -79,46 +81,59 @@ defer battle.Stop()
 ```
 The string "pokemon-showdown" here is the path to the binary of the same name.
 
-At this point we can begin reading the [current state](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/battle_state.go) of the battle from the simulator. This will tell us 
+At this point we can get the [current state](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/battle_state.go) of the battle from the simulator. This will tell us 
 - the winning player (if any)
 - the state of each players field & team
-- bonus messages
+- battle events 
 ```golang
-for state := battle.Read() {
-    // do something
-}
+state := battle.State()
 ```
 
-Each player gets an update including
-- the player id
-- whether the player needs to make a decision (default) or 'wait'
-- which pokemon positions need to switch out
+The battle state contains the current status of both players teams & is intended to give enough information to allow a player or players to make their next choice.
+- whether the player needs to make a decision (default) or 'wait' (for an opponents decision)
+- which pokemon positions need to switch out (if any)
 - the currently active pokemon
 - the players' team of pokemon
 
-Each [pokemon in the players team](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/battle_update.go#L119) includes all of the general information you might expect (status, HP, stats, ability, items, moves etc). Pokemon that are 'active' include extra information detailing extra move information & options available to them (Dynamax, Megaevolution, Zmoves etc).
+Each [pokemon in the players team](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/update.go#L185) includes all of the general information you might expect (status, HP, stats, ability, items, moves etc). Pokemon that are 'active' include extra information detailing moves & options available to them (Dynamax, Megaevolution, Zmoves etc).
 
 For each player that needs to make a choice an [action](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/action.go) is expected that includes information on what to do for each active pokemon.
 ```golang
-act := &structs.Action{
+actP1 := &structs.Action{
     Player: "p1",
     Specs: []*structs.ActionSpec{
         &structs.ActionSpec{Type: structs.ActionMove, ID: 0},
     },
 }
 
-_ = battle.Write(act)
+actP2 := ...
+
+state, err = battle.Turn([]*structs.Action{actP1, actP2})
 ```
 This tells the simulator that player p1 wishes their pokemon to use move 0 (that is, the 1st available move). In the same way we could indicate that we wish to switch out to pokemon in position #5 in the team (ie. the 6th team member).
 ```golang
         &structs.ActionSpec{Type: structs.ActionSwitch, ID: 5},
 ```
-In doubles battles we need to supply two of these specs, in order, that indicate what each active pokemon should do. Additionally in doubles battles we may be required to give a move [target](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/action.go#L47), perhaps better explained [here](https://github.com/smogon/pokemon-showdown/blob/master/sim/SIM-PROTOCOL.md).
+In doubles battles we need to supply two of these specs, in order, that indicate what each active pokemon should do. Additionally in doubles battles we may be required to give a move [target](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/action.go#L47), perhaps better explained [here](https://github.com/smogon/pokemon-showdown/blob/master/sim/SIM-PROTOCOL.md) depending on the move.
 
-Once every player that needs to has called [write](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/sim/interface.go#L21) the engine will output the next turns data, publishing the current state of the field. The cycle continues until a victor is announced.
+Assuming no errors the Turn function returns the new battle state, but you can also call `.State()` to get the current state as well if desired. 
+
+
+### Events
+
+Of course we need more than just "here is the state of play, please pick an action" we want to know what happened during the turn - did a move hit? An item or ability activate? For all of these things we have [events](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/event.go) which are attached to the battle state.
+
+Events always include the [event type](https://github.com/voidshard/poke-showdown-go/blob/main/pkg/structs/event.go) which map to those used by the [simulator](https://github.com/smogon/pokemon-showdown/blob/master/sim/SIM-PROTOCOL.md#major-actions).
+Depending on the event they will also specify 
+- the subject pokemon of the event
+- additional "target" pokemon that the event mentions
+- the event name (a move, ability, item name or similar descriptor)
+- the event magnitude (an int)
+- event metadata (additional tags to add context)
+Currently 'pokemon' returned in events are references to a player & active field position (a, b, c).
 
 
 ### TODO
 
-- parse battle update messages ("it is sunny", "pokemon used move") into event structs
-- fix tests after some internal reworking
+- More unit tests
+- Check for edge cases in some events

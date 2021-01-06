@@ -10,5 +10,5 @@ func TestNewBattleState(t *testing.T) {
 
 	assert.NotNil(t, result)
 	assert.NotNil(t, result.Field)
-	assert.NotNil(t, result.Messages)
+	assert.NotNil(t, result.Events)
 }

@@ -52,22 +52,39 @@ func DecodeUpdate(data []byte) (*Update, error) {
 			continue
 		}
 
+		pkm.Data = &DerivedData{
+			// helpfully pre-parse fields for user(s)
+			Species:     pkm.species(),
+			Gender:      pkm.gender(),
+			IsAsleep:    pkm.isAsleep(),
+			IsBurned:    pkm.isBurned(),
+			IsPoisoned:  pkm.isBurned(),
+			IsToxiced:   pkm.isToxiced(),
+			IsFrozen:    pkm.isFrozen(),
+			IsParalyzed: pkm.isParalyzed(),
+			IsFainted:   pkm.isFainted(),
+		}
+
 		curHP, maxHP, err := pkm.parseHP()
 		if err != nil {
 			return nil, err
 		}
-		pkm.HPNow = curHP
-		pkm.HPMax = maxHP
+		pkm.Data.HPNow = curHP
+		pkm.Data.HPMax = maxHP
 
 		lvl, err := pkm.parseLevel()
 		if err != nil {
 			return nil, err
 		}
-		pkm.Level = lvl
+		pkm.Data.Level = lvl
+
+		pkm.Data.Shiny = strings.Contains(pkm.Details, ", shiny")
 
 		key := pkm.moveHash()
 		var rawOpts *activeData
-		for _, i := range raw.Active { // is a list 1-2 pokemon long
+		for _, i := range raw.Active { // is a list 1-3 pokemon long
+			// try to match active pokemon (about which we are given
+			// no identifiers other than their moves) to pokemon in the team
 			if key == i.moveHash() {
 				update.Active = append(update.Active, index)
 				rawOpts = i
@@ -91,15 +108,51 @@ func DecodeUpdate(data []byte) (*Update, error) {
 	return update, nil
 }
 
+const (
+	TargetAdjAlly       = "adjacentAlly" // helping hand
+	TargetAdjAllyOrSelf = "adjacentAllyOrSelf"
+	TargetAdjFoe        = "adjacentFoe"
+	TargetAll           = "all" // eg. explosion
+	TargetAdj           = "allAdjacent"
+	TargetAdjFoes       = "allAdjacentFoes"
+	TargetAllies        = "allies"   // life dew
+	TargetAllySide      = "allySide" // tailwind
+	TargetAllyTeam      = "allyTeam" // heal bell
+	TargetAny           = "any"
+	TargetFoeSide       = "foeSide"      // electroweb
+	TargetNormal        = "normal"       // waterfall
+	TargetRandomNormal  = "randomNormal" // metronome
+	TargetScripted      = "scripted"     // counter
+	TargetSelf          = "self"         // recover
+)
+
 // Move struct expands on simply the move name to include relevant in battle info.
 type Move struct {
-	// Id is the name string, but caseless & run together
+	// Id is the name string, but no symbols & lowercase
 	Id string `json:"id"`
 
 	// Human readable name
 	Name string `json:"move"`
 
+	// https://github.com/smogon/pokemon-showdown/blob/master/sim/dex-moves.ts
 	// Target details what pokemon can be targeted in doubles+ battles
+	/**
+	 * adjacentAlly - Only relevant to Doubles or Triples, the move only targets an ally of the user.
+	 * adjacentAllyOrSelf - The move can target the user or its ally.
+	 * adjacentFoe - The move can target a foe, but not (in Triples) a distant foe.
+	 * all - The move targets the field or all Pokémon at once.
+	 * allAdjacent - The move is a spread move that also hits the user's ally.
+	 * allAdjacentFoes - The move is a spread move.
+	 * allies - The move affects all active Pokémon on the user's team.
+	 * allySide - The move adds a side condition on the user's side.
+	 * allyTeam - The move affects all unfainted Pokémon on the user's team.
+	 * any - The move can hit any other active Pokémon, not just those adjacent.
+	 * foeSide - The move adds a side condition on the foe's side.
+	 * normal - The move can hit one adjacent Pokémon of your choice.
+	 * randomNormal - The move targets an adjacent foe at random.
+	 * scripted - The move targets the foe that damaged the user.
+	 * self - The move affects the user of the move.
+	 */
 	Target string `json:"target"`
 
 	// General house keeping information
@@ -159,12 +212,35 @@ type Pokemon struct {
 	// Pokeball the pokemon has been caught in
 	Pokeball string `json:"pokeball"`
 
+	// Data is information we parse out & attach for ease of use
+	Data *DerivedData `json:"data"`
+
+	// Name, Level, Gender run together with ','
+	// Nb. Level is not given if it is 100.
+	// ie. Chesnaught, L82, M
+	Details string `json:"details"`
+
 	// From observation condition is a string like
 	// 30/130
 	// 0 fnt
 	// 130/240 slp
 	// ie. HP/MaxHap status1 status2
 	Condition string `json:"condition"`
+}
+
+type DerivedData struct {
+	// Species is the pokemons major species
+	Species string
+
+	// Level is the pokemons current level
+	Level int
+
+	// Shiny indicates bling
+	Shiny bool
+
+	// Gender indicates male / femaleness.
+	// Nb. not all pokemon have a gender
+	Gender string
 
 	// HPNow is the pokemons current HP
 	HPNow int
@@ -172,12 +248,26 @@ type Pokemon struct {
 	// HPMax is the pokemons full HP (if known)
 	HPMax int
 
-	// Level is the pokemons current level
-	Level int
+	// various status effects
+	IsAsleep    bool
+	IsBurned    bool
+	IsPoisoned  bool
+	IsToxiced   bool
+	IsFrozen    bool
+	IsParalyzed bool
+	IsFainted   bool
+}
 
-	// Name, Level, Gender run together with ','
-	// ie. Chesnaught, L82, M
-	Details string `json:"details"`
+func (p *Pokemon) gender() string {
+	for _, chunk := range strings.Split(p.Details, ", ")[1:] {
+		switch chunk {
+		case "F", "M", "N":
+			return chunk
+		default:
+			continue
+		}
+	}
+	return ""
 }
 
 func (p *Pokemon) parseLevel() (int, error) {
@@ -185,43 +275,55 @@ func (p *Pokemon) parseLevel() (int, error) {
 	if len(bits) <= 1 {
 		return -1, fmt.Errorf("unable to parse level: %s", p.Details)
 	}
-	lvl, err := strconv.ParseInt(bits[1][1:], 10, 64)
-	return int(lvl), err
+
+	for _, chunk := range bits[1:] {
+		if strings.HasPrefix(chunk, "L") {
+			lvl, err := strconv.ParseInt(chunk[1:], 10, 64)
+			return int(lvl), err
+		}
+	}
+
+	return 100, nil
 }
 
-func (p *Pokemon) Species() string {
+func (p *Pokemon) species() string {
 	bits := strings.Split(p.Details, ", ")
 	return bits[0]
 }
 
 // IsAsleep returns if the pokemon is asleep
-func (p *Pokemon) IsAsleep() bool {
+func (p *Pokemon) isAsleep() bool {
 	return strings.Contains(p.Condition, " slp")
 }
 
+// IsFrozen returns if the pokemon is frozen
+func (p *Pokemon) isFrozen() bool {
+	return strings.Contains(p.Condition, " frz")
+}
+
 // IsBurned returns if the pokemon is burned
-func (p *Pokemon) IsBurned() bool {
+func (p *Pokemon) isBurned() bool {
 	return strings.Contains(p.Condition, " brn")
 }
 
 // IsParalyzed returns if the pokemon is burned
-func (p *Pokemon) IsParalyzed() bool {
+func (p *Pokemon) isParalyzed() bool {
 	return strings.Contains(p.Condition, " par")
 }
 
 // IsFainted returns if the pokemon has fainted
-func (p *Pokemon) IsFainted() bool {
+func (p *Pokemon) isFainted() bool {
 	return strings.Contains(p.Condition, " fnt")
 }
 
 // IsPoisoned returns if the pokemon is poisoned
 // (either standard poison or toxic)
-func (p *Pokemon) IsPoisoned() bool {
-	return strings.Contains(p.Condition, " psn") || p.IsToxiced()
+func (p *Pokemon) isPoisoned() bool {
+	return strings.Contains(p.Condition, " psn") || p.isToxiced()
 }
 
 // IsToxiced returns if the pokemon has been "badly" poisoned
-func (p *Pokemon) IsToxiced() bool {
+func (p *Pokemon) isToxiced() bool {
 	return strings.Contains(p.Condition, " tox")
 }
 
@@ -231,24 +333,39 @@ func (p *Pokemon) IsToxiced() bool {
 // Or returns an error.
 // Note that if the pokemon has fainted we no longer know the max HP :(
 func (p *Pokemon) parseHP() (int, int, error) {
-	bits := strings.SplitN(p.Condition, " ", 2)
+	now, max, _, err := parseCondition(p.Condition)
+	return now, max, err
+}
+
+func parseCondition(condition string) (int, int, string, error) {
+	if strings.Contains(condition, "fnt") {
+		return 0, -1, "fnt", nil
+	}
+
+	bits := strings.SplitN(condition, " ", 2)
 
 	if bits[0] == "0" {
 		// fainted
-		return 0, -1, nil
+		return 0, -1, "fnt", nil
 	}
 
 	hpstats := strings.Split(bits[0], "/")
 	if len(hpstats) != 2 {
-		return -1, -1, fmt.Errorf("unable to read HP stats: %s [from %s]", bits[0], p.Condition)
+		return -1, -1, "", fmt.Errorf("unable to read HP stats: %s [from %s]", bits[0], condition)
 	}
 
 	cur, err := strconv.ParseInt(hpstats[0], 10, 64)
 	if err != nil {
-		return -1, -1, err
+		return -1, -1, "", err
 	}
 	max, err := strconv.ParseInt(hpstats[1], 10, 64)
-	return int(cur), int(max), err
+
+	st := ""
+	if len(bits) > 1 {
+		st = bits[1]
+	}
+
+	return int(cur), int(max), st, err
 }
 
 // ----------------------

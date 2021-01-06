@@ -12,20 +12,18 @@ type BattleState struct {
 	// Obviously implies battle is over
 	Winner string
 
-	Messages []string
-	Events   []*Event
+	// Turn number
+	Turn int
+
+	// Events that happened this turn
+	Events []*Event
 }
 
 // NewBattleState returns a new empty BattleState
 func NewBattleState() *BattleState {
 	return &BattleState{
-		Field:    map[string]*Update{},
-		Messages: []string{},
-		Events:   []*Event{},
+		Field:  map[string]*Update{},
+		Events: []*Event{},
+		Turn:   -1,
 	}
-}
-
-// Event represents some event that has happened during a turn
-type Event struct {
-	Type string
 }

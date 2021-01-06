@@ -38,28 +38,31 @@ func TestPokemonStatus(t *testing.T) {
 		Fainted   bool
 		Poisoned  bool
 		Toxiced   bool
+		Frozen    bool
 	}{
-		{"150/150", false, false, false, false, false, false},
-		{"150/150 slp", true, false, false, false, false, false},
-		{"150/150 brn", false, true, false, false, false, false},
-		{"150/150 par", false, false, true, false, false, false},
-		{"0 fnt", false, false, false, true, false, false},
-		{"150/150 psn", false, false, false, false, true, false},
-		{"150/150 tox", false, false, false, false, true, true},
+		{"150/150", false, false, false, false, false, false, false},
+		{"150/150 slp", true, false, false, false, false, false, false},
+		{"150/150 brn", false, true, false, false, false, false, false},
+		{"150/150 par", false, false, true, false, false, false, false},
+		{"0 fnt", false, false, false, true, false, false, false},
+		{"150/150 psn", false, false, false, false, true, false, false},
+		{"150/150 tox", false, false, false, false, true, true, false},
+		{"150/150 frz", false, false, false, false, false, false, true},
 	}
 	for i, tt := range cases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			pkm := &Pokemon{Condition: tt.Condition}
 
-			assert.Equal(t, tt.Asleep, pkm.IsAsleep())
-			assert.Equal(t, tt.Burned, pkm.IsBurned())
-			assert.Equal(t, tt.Paralyzed, pkm.IsParalyzed())
-			assert.Equal(t, tt.Fainted, pkm.IsFainted())
-			assert.Equal(t, tt.Poisoned, pkm.IsPoisoned())
-			assert.Equal(t, tt.Toxiced, pkm.IsToxiced())
+			assert.Equal(t, tt.Asleep, pkm.isAsleep())
+			assert.Equal(t, tt.Burned, pkm.isBurned())
+			assert.Equal(t, tt.Paralyzed, pkm.isParalyzed())
+			assert.Equal(t, tt.Fainted, pkm.isFainted())
+			assert.Equal(t, tt.Poisoned, pkm.isPoisoned())
+			assert.Equal(t, tt.Toxiced, pkm.isToxiced())
+			assert.Equal(t, tt.Frozen, pkm.isFrozen())
 
 			if tt.Toxiced {
-				assert.True(t, pkm.IsPoisoned())
+				assert.True(t, pkm.isPoisoned())
 			}
 		})
 	}
@@ -71,12 +74,13 @@ func TestPokemonSpecies(t *testing.T) {
 		Expect string
 	}{
 		{"Umbreon, L5, F", "Umbreon"},
+		{"Umbreon, F", "Umbreon"},
 		{"Whatever, L10, M", "Whatever"},
 	}
 
 	for i, tt := range cases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result := (&Pokemon{Details: tt.Given}).Species()
+			result := (&Pokemon{Details: tt.Given}).species()
 
 			assert.Equal(t, tt.Expect, result)
 		})
@@ -89,6 +93,7 @@ func TestPokemonLevel(t *testing.T) {
 		Expect int
 	}{
 		{"Umbreon, L5, F", 5},
+		{"Umbreon, F", 100}, // don't even get me started. WTF
 		{"Whatever, L10, M", 10},
 	}
 
@@ -113,7 +118,8 @@ func TestDecodeUpdate(t *testing.T) {
 	assert.Equal(t, 2, len(result.Pokemon))
 	assert.Equal(t, "p2", result.Player)
 	assert.Equal(t, []int{0}, result.Active)
-	assert.Equal(t, "Zoroark", result.Pokemon[0].Species())
+	assert.Equal(t, "Zoroark", result.Pokemon[0].species())
 	assert.NotNil(t, result.Pokemon[0].Options)
-	assert.Equal(t, "Umbreon", result.Pokemon[1].Species())
+	assert.NotNil(t, result.Pokemon[0].Data)
+	assert.Equal(t, "Umbreon", result.Pokemon[1].species())
 }

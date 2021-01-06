@@ -7,6 +7,7 @@ import (
 	"github.com/voidshard/poke-showdown-go/pkg/structs"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -52,7 +53,9 @@ func (a *activeCmd) start(spec *structs.BattleSpec) error {
 
 	// #2 for each player we need to announce them & their team in packed format
 	orders := []string{}
-	for player, team := range spec.Players {
+	for num, team := range spec.Players {
+		player := fmt.Sprintf("p%d", num+1)
+
 		pteam := ""
 		if team != nil {
 			pteam = structs.PackTeam(team)
@@ -85,13 +88,6 @@ func (a *activeCmd) start(spec *structs.BattleSpec) error {
 	// be in (ie, battle order).
 	for _, order := range orders {
 		a.stdin <- order
-		// Nb. for some reason if we push these in too quickly pokemon-showdown
-		// will not reply with a "sideupdate" for one+ of the teams leaving us
-		// unsure what to do.
-		// We sleep here to give the process time to absorb what we've said before
-		// pushing in more instructions.
-		// It only seems to be a problem with this action.
-		time.Sleep(time.Millisecond * 100)
 	}
 
 	return a.latestErrors()
@@ -150,12 +146,10 @@ func (a *activeCmd) queueError(err error) {
 }
 
 type SimV3 struct {
-	update     *activeCmd
-	events     *activeCmd
-	state      chan *structs.BattleState
-	incomplete chan *structs.BattleState
-	spec       *structs.BattleSpec
-	errors     chan error
+	process *activeCmd
+	spec    *structs.BattleSpec
+	errors  chan error
+	current *structs.BattleState
 }
 
 func NewSimV3(binary string, spec *structs.BattleSpec) (Simulation, error) {
@@ -163,76 +157,77 @@ func NewSimV3(binary string, spec *structs.BattleSpec) (Simulation, error) {
 		spec.Seed = rng.Int()
 	}
 
-	update := startCmd(binary, []string{"simulate-battle"})
-	err := update.start(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	events := startCmd(binary, []string{"simulate-battle", "-S"})
-	err = events.start(spec)
+	process := startCmd(binary, []string{"simulate-battle"})
+	err := process.start(spec)
 	if err != nil {
 		return nil, err
 	}
 
 	sv3 := &SimV3{
-		update: update,
-		events: events,
-		state:  make(chan *structs.BattleState),
-		spec:   spec,
-		errors: make(chan error),
+		process: process,
+		spec:    spec,
+		errors:  make(chan error),
 	}
-	go sv3.readPump()
 
-	return sv3, nil
+	_, err = sv3.readState()
+	return sv3, err
 }
 
-func (s *SimV3) readPump() {
+func (s *SimV3) State() *structs.BattleState {
+	return s.current
+}
+
+func (s *SimV3) readState() (*structs.BattleState, error) {
 	state := structs.NewBattleState()
-	messages := []string{}
-	messagesReady := false
+	events := []*structs.Event{}
+	turnOver := false
 
-	for {
-		select {
-		case msg := <-s.events.stdout:
-			msgs, err := parseMessages(msg)
-			if err != nil {
-				s.events.queueError(err)
-				s.errors <- err
-			}
-			for _, msg := range msgs {
-				messages = append(messages, msg)
-				if strings.Contains(msg, "|turn|") || strings.Contains(msg, "|win|") {
-					messagesReady = true
-				}
-			}
+	for msg := range s.process.stdout {
+		fmt.Println(msg)
 
-			if messagesReady && (state.Winner != "" || len(state.Field) == len(s.spec.Players)) {
-				state.Messages = messages
-				s.state <- state
-				state = structs.NewBattleState()
-				messages = []string{}
-				messagesReady = false
-			}
-		case msg := <-s.update.stdout:
-			err := parseState(msg, state)
-			if err != nil {
-				s.update.queueError(err)
-				s.errors <- err
-			}
-
-			if messagesReady && (state.Winner != "" || len(state.Field) == len(s.spec.Players)) {
-				state.Messages = messages
-				s.state <- state
-				state = structs.NewBattleState()
-				messages = []string{}
-				messagesReady = false
+		msgs, err := parseStdout(msg, state)
+		if err != nil {
+			return nil, err
+		}
+		for _, msg := range msgs {
+			evt := structs.ParseEvent(msg)
+			if evt != nil {
+				events = append(events, evt)
 			}
 		}
+
+		winner := state.Winner != ""
+		turnOver = state.Turn > -1 || winner
+		complete := len(state.Field) == len(s.spec.Players)
+
+		forceSwitch := false
+		if complete {
+			for _, f := range state.Field {
+				for _, pos := range f.ForceSwitch {
+					if pos {
+						forceSwitch = true
+					}
+				}
+			}
+		}
+
+		if (turnOver || forceSwitch) && (winner || complete) {
+			state.Events = events
+			if state.Turn == -1 {
+				state.Turn = s.current.Turn
+			}
+
+			s.current = state
+			return state, nil
+		}
 	}
+
+	return nil, nil
 }
 
-func parseState(raw string, state *structs.BattleState) error {
+func parseStdout(raw string, state *structs.BattleState) ([]string, error) {
+	// requires showdown version 0.11.4+ to fix a bug where messages are not returned
+	msgs := []string{}
 	lines := strings.Split(strings.Trim(strings.TrimSpace(raw), "\x00"), "\n")
 	for i := 0; i < len(lines); i++ {
 		if strings.HasPrefix(lines[i], "|request|") {
@@ -245,35 +240,69 @@ func parseState(raw string, state *structs.BattleState) error {
 				continue
 			}
 
+			// the simulator is asking a player to make a choice
 			update, err := structs.DecodeUpdate([]byte(encoded))
 			if err != nil {
-				return err
+				return msgs, err
 			}
 			state.Field[player] = update
-		} else if strings.HasPrefix(lines[i], "|error|") {
-			if strings.Contains(lines[i], "Can't choose for Team Preview") {
+		} else if strings.HasPrefix(lines[i], "|switch|") || strings.HasPrefix(lines[i], "|-damage|") || strings.HasPrefix(lines[i], "|-heal|") {
+			// Nb. the simulator returns duplicates of some messages
+			// - in particular switch, damage and heal messages
+			// can be replayed with both actual health & percentage
+			// (/100) values. This is super annoying and it's easy
+			// to figure out a percentage given the health values.
+			// So here we strip out the duplicates ..
+			bitsthis := strings.Split(lines[i], "|")
+
+			// if it's not the same event type as previous
+			if !strings.HasPrefix(lines[i-1], "|"+bitsthis[1]) {
+				msgs = append(msgs, lines[i])
 				continue
 			}
-			return fmt.Errorf(strings.Replace(lines[i], "|error|", "", 1))
-		} else if strings.HasPrefix(lines[i], "|win|") {
-			bits := strings.Split(lines[i], "|")
-			state.Winner = bits[len(bits)-1]
-		}
-	}
-	return nil
-}
 
-func parseMessages(raw string) ([]string, error) {
-	msgs := []string{}
-	lines := strings.Split(strings.Trim(strings.TrimSpace(raw), "\x00"), "\n")
-	for i := 0; i < len(lines); i++ {
-		if strings.HasPrefix(lines[i], "|request|") {
-			continue
+			bitsprev := strings.Split(lines[i-1], "|")
+			// if it is the same type as previous & about the same pokemon
+			if bitsthis[2] == bitsprev[2] {
+				continue
+			}
 		} else if strings.HasPrefix(lines[i], "|error|") {
 			if strings.Contains(lines[i], "Can't choose for Team Preview") {
+				// we always give a team layout. If it's not valid
+				// for the format then whatever - it does no harm.
 				continue
 			}
 			return msgs, fmt.Errorf(strings.Replace(lines[i], "|error|", "", 1))
+		} else if strings.HasPrefix(lines[i], "|win|") {
+			bits := strings.Split(lines[i], "|")
+			state.Winner = bits[len(bits)-1]
+		} else if strings.HasPrefix(lines[i], "|turn|") {
+			bits := strings.Split(lines[i], "|")
+			i, err := strconv.ParseInt(bits[len(bits)-1], 10, 64)
+			if err != nil {
+				return msgs, err
+			}
+			state.Turn = int(i)
+		} else if strings.HasPrefix(lines[i], "|split|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|start") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|poke|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|t:|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|player|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|teamsize|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|gametype|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|gen|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|tier|") {
+			continue
+		} else if strings.HasPrefix(lines[i], "|rule|") {
+			continue
 		} else if strings.HasPrefix(lines[i], "|") {
 			if strings.Count(lines[i], "|") > 1 {
 				msgs = append(msgs, lines[i])
@@ -283,33 +312,27 @@ func parseMessages(raw string) ([]string, error) {
 	return msgs, nil
 }
 
-// Write writes one player decision(s) for their pokemon (1 or more) to
-// the simulator.
-func (s *SimV3) Write(act *structs.Action) error {
-	msg := act.Pack()
-
-	s.update.stdin <- msg
-	time.Sleep(time.Millisecond * 100)
-	err := s.update.latestErrors()
-	if err != nil {
-		return err
+// Turn supplies all decisions needed to move to the next turn
+func (s *SimV3) Turn(decisions []*structs.Action) (*structs.BattleState, error) {
+	for _, decision := range decisions {
+		err := s.write(decision)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	s.events.stdin <- msg
-	time.Sleep(time.Millisecond * 100)
-
-	return s.events.latestErrors()
+	return s.readState()
 }
 
-func (s *SimV3) Read() <-chan *structs.BattleState {
-	return s.state
+// Write writes one player decision(s) for their pokemon (1 or more) to
+// the simulator.
+func (s *SimV3) write(act *structs.Action) error {
+	msg := act.Pack()
+	s.process.stdin <- msg
+	return s.process.latestErrors()
 }
 
+// Stop simulation & kill subprocess(es)
 func (s *SimV3) Stop() {
-	s.update.stop()
-	s.events.stop()
-}
-
-func (s *SimV3) Errors() <-chan error {
-	return s.errors
+	s.process.stop()
 }
