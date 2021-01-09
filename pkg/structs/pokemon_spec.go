@@ -17,12 +17,67 @@ type PokemonSpec struct {
 	EffortValues     *StatValues `json:"evs"`    // 0-255
 	Gender           string      `json:"gender"` // one of M F N
 	IndividualValues *StatValues `json:"ivs"`    // 0-31
-	Shiny            bool        `json:"shiny"`
-	Level            int         `json:"level"` // 1-100
+	Level            int         `json:"level"`  // 1-100
 	Happiness        int         `json:"happiness"`
 	HPType           string      `json:"hpType"`
 	PokeballType     string      `json:"pokeball"`
 	GigantaMax       bool        `json:"gigantamax"`
+}
+
+// enforceLimits clamps down on int values so they're within acceptable ranges
+func (b *PokemonSpec) enforceLimits() {
+	if b.Moves == nil || len(b.Moves) == 0 {
+		b.Moves = []string{"struggle"}
+	} else if len(b.Moves) > 4 {
+		b.Moves = b.Moves[:4]
+	}
+
+	if b.EffortValues != nil {
+		b.EffortValues.HP = clamp(0, 255, b.EffortValues.HP)
+		b.EffortValues.Attack = clamp(0, 255, b.EffortValues.Attack)
+		b.EffortValues.Defense = clamp(0, 255, b.EffortValues.Defense)
+		b.EffortValues.SpecialAttack = clamp(0, 255, b.EffortValues.SpecialAttack)
+		b.EffortValues.SpecialDefense = clamp(0, 255, b.EffortValues.SpecialDefense)
+		b.EffortValues.Speed = clamp(0, 255, b.EffortValues.Speed)
+
+		if b.EffortValues.Sum() > 510 {
+			b.EffortValues.HP = 85
+			b.EffortValues.Attack = 85
+			b.EffortValues.Defense = 85
+			b.EffortValues.SpecialAttack = 85
+			b.EffortValues.SpecialDefense = 85
+			b.EffortValues.Speed = 85
+		}
+	}
+	if b.IndividualValues != nil {
+		b.IndividualValues.HP = clamp(0, 31, b.IndividualValues.HP)
+		b.IndividualValues.Attack = clamp(0, 31, b.IndividualValues.Attack)
+		b.IndividualValues.Defense = clamp(0, 31, b.IndividualValues.Defense)
+		b.IndividualValues.SpecialAttack = clamp(0, 31, b.IndividualValues.SpecialAttack)
+		b.IndividualValues.SpecialDefense = clamp(0, 31, b.IndividualValues.SpecialDefense)
+		b.IndividualValues.Speed = clamp(0, 31, b.IndividualValues.Speed)
+	}
+
+	switch b.Gender {
+	case "M", "F", "N":
+		break
+	default:
+		b.Gender = ""
+	}
+
+	b.Level = clamp(1, 100, b.Level)
+	b.Happiness = clamp(0, 255, b.Happiness)
+}
+
+// clamp makes an int between two given min, max values
+func clamp(min, max, value int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
 
 // PackTeam turns a list of PokemonSpec into a pokemon-showdown compliant `packed` string.
@@ -48,6 +103,7 @@ func (b *PokemonSpec) Pack() string {
 	// are also entirely omitted if they're the default values.
 	// We always include these values because it's much easier and we're
 	// not sending packed data over the network.
+	b.enforceLimits()
 
 	packedIvs := "31,31,31,31,31,31"
 	if b.IndividualValues != nil {
@@ -91,7 +147,7 @@ func (b *PokemonSpec) Pack() string {
 			packedEvs,
 			b.Gender,
 			packedIvs,
-			packbool(b.Shiny, "S"),
+			"", // isShiny
 			fmt.Sprintf("%d", b.Level),
 			fmt.Sprintf(
 				"%d,%s,%s,%s",
@@ -121,4 +177,9 @@ type StatValues struct {
 	SpecialAttack  int `json:"spa"`
 	SpecialDefense int `json:"spd"`
 	Speed          int `json:"spe"`
+}
+
+// Sum returns the total of all of the stats
+func (s *StatValues) Sum() int {
+	return s.HP + s.Attack + s.Defense + s.SpecialAttack + s.SpecialDefense + s.Speed
 }

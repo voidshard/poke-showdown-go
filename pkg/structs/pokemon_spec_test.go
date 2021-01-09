@@ -7,6 +7,26 @@ import (
 	"testing"
 )
 
+func TestEnforceLimits(t *testing.T) {
+	p := PokemonSpec{
+		Moves:            []string{"a", "b", "c", "d", "e", "f"},
+		EffortValues:     &StatValues{255, 255, 255, 0, 0, 0},
+		IndividualValues: &StatValues{39, -15, 31, 31, 31, 31},
+		Gender:           "X",
+		Level:            300,
+		Happiness:        -150,
+	}
+
+	p.enforceLimits()
+
+	assert.Equal(t, []string{"a", "b", "c", "d"}, p.Moves)
+	assert.Equal(t, &StatValues{85, 85, 85, 85, 85, 85}, p.EffortValues)
+	assert.Equal(t, &StatValues{31, 0, 31, 31, 31, 31}, p.IndividualValues)
+	assert.Equal(t, "", p.Gender)
+	assert.Equal(t, 100, p.Level)
+	assert.Equal(t, 0, p.Happiness)
+}
+
 func TestPackBool(t *testing.T) {
 	defVal := "value"
 
@@ -42,4 +62,18 @@ func TestPackTeam(t *testing.T) {
 
 	result := PackTeam(team)
 	assert.Equal(t, packedTeam, result)
+}
+
+func TestClamp(t *testing.T) {
+	assert.Equal(t, 130, clamp(0, 200, 130))
+	assert.Equal(t, 0, clamp(0, 200, -1))
+	assert.Equal(t, 200, clamp(0, 200, 940))
+}
+
+func TestSum(t *testing.T) {
+	given := &StatValues{10, 20, 30, 40, 50, 60}
+
+	result := given.Sum()
+
+	assert.Equal(t, 210, result)
 }

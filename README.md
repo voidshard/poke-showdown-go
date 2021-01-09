@@ -10,11 +10,9 @@ This library provides a Golang interface for interacting with the pokemon-showdo
 - Once all players have decided what to do a new battle state is returned
 
 
-### Warnings
+### Note 
 
-- This is still under development and the API / struct names may change in the future (suggestions & PRs welcome).
-- There's very little validation logic in here at the moment, so be careful setting legal values (ie. IVs are between 0-31, EVs 0-255, level 1-100). What happens when you set illegal values is currently undefined.
-- This isn't intended to hold data about all pokemon species, items, abilities etc. For that you can use pokemon-showdown to [generate teams](https://github.com/smogon/pokemon-showdown/blob/master/COMMANDLINE.md) or check out [one](https://github.com/veekun/pokedex) of [these](https://github.com/PokeAPI).
+This project doesn't hold data about all pokemon species, items, abilities etc. For that you can use pokemon-showdown to [generate teams](https://github.com/smogon/pokemon-showdown/blob/master/COMMANDLINE.md) or check out [one](https://github.com/veekun/pokedex) of [these](https://github.com/PokeAPI).
 
 
 ### Installing
