@@ -183,8 +183,6 @@ func (s *SimV3) readState() (*structs.BattleState, error) {
 	turnOver := false
 
 	for msg := range s.process.stdout {
-		fmt.Println(msg)
-
 		msgs, err := parseStdout(msg, state)
 		if err != nil {
 			return nil, err

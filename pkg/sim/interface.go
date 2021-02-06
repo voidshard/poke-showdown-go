@@ -15,7 +15,7 @@ type Simulation interface {
 	// battle simulation.
 	Turn([]*structs.Action) (*structs.BattleState, error)
 
-	//
+	// State returns the last successfully read state
 	State() *structs.BattleState
 
 	// Stop the battle and closes running processes

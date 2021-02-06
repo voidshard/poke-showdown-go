@@ -67,7 +67,7 @@ func (a *Action) Pack() string {
 	lines := []string{}
 	for _, spec := range a.Specs {
 		switch spec.Type {
-		case ActionMove:
+		case ActionMove, "": // default to move if not given
 			lines = append(lines, fmt.Sprintf("move %s", packMove(spec)))
 		case ActionSwitch:
 			// showdown switch indexes start from 1

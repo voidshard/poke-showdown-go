@@ -53,10 +53,12 @@ func Run(cmd string, args []string, stdin <-chan string, ctrl chan os.Signal, op
 	pump(cmdStderr, retStderr, pumpErrs, "\n")    // return any error lines
 
 	go func() {
+		/* Commented out to prevent send on closed during utils Simulate
 		defer close(retStdout)
 		defer close(retStderr)
 		defer close(retErr)
 		defer close(pumpErrs)
+		*/
 		defer cmdStdout.Close()
 		defer cmdStderr.Close()
 		defer cmdStdIn.Close()
