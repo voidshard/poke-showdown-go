@@ -9,6 +9,8 @@ This library provides a Golang interface for interacting with the pokemon-showdo
 - Decision(s) of players (human or otherwise) can be written to the simulator interface
 - Once all players have decided what to do a new battle state is returned
 
+It also provides a simple [stateless HTTP server](https://github.com/voidshard/poke-showdown-go/blob/main/cmd/http/main.go) for pokemon battles / AI.
+
 
 ### Note 
 
