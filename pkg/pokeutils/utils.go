@@ -45,8 +45,6 @@ func randomTeam(binary string) ([]*structs.PokemonSpec, error) {
 	stdin := make(chan string)
 	cntrl := make(chan os.Signal)
 
-	fmt.Println(string(out))
-
 	sout, serr, errs := cmd.Run(
 		binary, []string{"unpack-team"}, stdin, cntrl, cmd.Seperator("\n"),
 	)
