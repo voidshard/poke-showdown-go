@@ -44,10 +44,6 @@ func DecodeUpdate(data []byte) (*Update, error) {
 		Active:      []int{},
 	}
 	for index, pkm := range update.Pokemon {
-		if !pkm.Active {
-			continue
-		}
-
 		if raw.Active == nil || !pkm.Active {
 			continue
 		}
@@ -82,12 +78,13 @@ func DecodeUpdate(data []byte) (*Update, error) {
 
 		key := pkm.moveHash()
 		var rawOpts *activeData
-		for _, i := range raw.Active { // is a list 1-3 pokemon long
+		for slot, i := range raw.Active { // is a list 1-3 pokemon long
 			// try to match active pokemon (about which we are given
 			// no identifiers other than their moves) to pokemon in the team
 			if key == i.moveHash() {
 				update.Active = append(update.Active, index)
 				rawOpts = i
+				pkm.Slot = slot
 				break
 			}
 		}
@@ -188,6 +185,11 @@ type Pokemon struct {
 
 	// True if the pokemon is active in the battle currently.
 	Active bool `json:"active"`
+
+	// Represents the pokemons position on the field.
+	// This is only relevant if the pokemon is `Active` otherwise
+	// it (naturally) doesn't have a place on the field.
+	Slot int `json:"slot"`
 
 	// Options are things an active pokemon can do.
 	// Only set if Active is True.
