@@ -44,10 +44,6 @@ func DecodeUpdate(data []byte) (*Update, error) {
 		Active:      []int{},
 	}
 	for index, pkm := range update.Pokemon {
-		if raw.Active == nil || !pkm.Active {
-			continue
-		}
-
 		pkm.Data = &DerivedData{
 			// helpfully pre-parse fields for user(s)
 			Species:     pkm.species(),
