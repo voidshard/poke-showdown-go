@@ -3,19 +3,22 @@ package pokeutils
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/voidshard/poke-showdown-go/pkg/cmd"
-	"github.com/voidshard/poke-showdown-go/pkg/structs"
+	"github.com/voidshard/poke-showdown-go/pkg/internal/cmd"
+	"github.com/voidshard/poke-showdown-go/pkg/sim"
 	"os"
 	"os/exec"
 	"time"
 )
 
+// Option is some option for RandomTeam
 type Option func(*opts)
 
+// opts is our function inputs
 type opts struct {
 	Binary string
 }
 
+// buildOpts turns options into an opts struct
 func buildOpts(in []Option) *opts {
 	cfg := &opts{Binary: "pokemon-showdown"}
 	for _, o := range in {
@@ -24,19 +27,22 @@ func buildOpts(in []Option) *opts {
 	return cfg
 }
 
+// Binary allows one to set the path to pokemon-showdown
 func Binary(path string) Option {
 	return func(o *opts) {
 		o.Binary = path
 	}
 }
 
-func RandomTeam(in ...Option) ([]*structs.PokemonSpec, error) {
+// RandomTeam uses pokemon-showdown to generate a random team of pokemon.
+func RandomTeam(in ...Option) ([]*sim.PokemonSpec, error) {
 	cfg := buildOpts(in)
 	team, err := randomTeam(cfg.Binary)
 	return team, err
 }
 
-func randomTeam(binary string) ([]*structs.PokemonSpec, error) {
+// randomTeam uses pokemon-showdown to generate a random team of pokemon.
+func randomTeam(binary string) ([]*sim.PokemonSpec, error) {
 	out, err := exec.Command(binary, "generate-team").Output()
 	if err != nil {
 		return nil, err
@@ -56,7 +62,7 @@ func randomTeam(binary string) ([]*structs.PokemonSpec, error) {
 
 	select {
 	case data := <-sout:
-		pkm := []*structs.PokemonSpec{}
+		pkm := []*sim.PokemonSpec{}
 		err = json.Unmarshal([]byte(data), &pkm)
 		return pkm, err
 	case data := <-serr:
