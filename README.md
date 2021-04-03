@@ -65,6 +65,7 @@ Before a battle is started we do check some things like
 - pokemon are found in showdown's [pokedex](https://play.pokemonshowdown.com/data/pokedex.json)
 - moves are found in showdown's [moves](https://play.pokemonshowdown.com/data/moves.json)
 - given pokemon have the listed ability
+
 We also clamp down on IVs (0-31) and EVs (0-225) & a few other basic things.
 
 
@@ -86,10 +87,10 @@ Asynchronously we can push player decisions into the simulator as either
 - Switch (we want to switch pokemon)
 - Pass (the given pokemon should do nothing)
 ```golang
-battle.Write(&structs.Action{
+battle.Write(&sim.Action{
        Player: "p1",
-       Specs: []*structs.ActionSpec{
-           &structs.ActionSpec{Type: structs.ActionMove, ID: "tackle"},
+       Specs: []*sim.ActionSpec{
+           &sim.ActionSpec{Type: sim.ActionMove, ID: "tackle"},
        },
 })
 ```
