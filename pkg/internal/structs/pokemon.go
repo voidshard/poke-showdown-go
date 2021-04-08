@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/voidshard/poke-showdown-go/pkg/internal/data"
+	data "github.com/voidshard/poke-showdown-go/pkg/pokedata"
 )
 
 // Pokemon is a pokemon taking part in a battle

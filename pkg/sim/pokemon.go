@@ -3,8 +3,8 @@ package sim
 import (
 	"log"
 
-	"github.com/voidshard/poke-showdown-go/pkg/internal/data"
 	"github.com/voidshard/poke-showdown-go/pkg/internal/structs"
+	data "github.com/voidshard/poke-showdown-go/pkg/pokedata"
 )
 
 // Pokemon is the final struct that amasses all the data we can manage to find.

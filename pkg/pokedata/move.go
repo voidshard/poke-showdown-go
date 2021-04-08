@@ -1,4 +1,4 @@
-package data
+package pokedata
 
 // MoveDexItem is data parsed from Showdown data files
 // https://play.pokemonshowdown.com/data/moves.json

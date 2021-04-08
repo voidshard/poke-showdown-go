@@ -32,6 +32,9 @@ func (f *Field) WhoIs(slotID string) *sim.Pokemon {
 func (f *Field) Update(ud *sim.Update) {
 	if ud.Side != nil {
 		f.sides[ud.Side.Player] = ud.Side
+		for i, s := range ud.Side.Field {
+			f.slots[s.ID] = ud.Side.Pokemon[i]
+		}
 		return
 	}
 

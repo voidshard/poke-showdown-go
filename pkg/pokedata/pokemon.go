@@ -1,4 +1,4 @@
-package data
+package pokedata
 
 // PokeDexItem is data parsed from Showdown data files
 // https://play.pokemonshowdown.com/data/pokedex.json

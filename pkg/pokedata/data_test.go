@@ -1,4 +1,4 @@
-package data
+package pokedata
 
 import (
 	"encoding/json"

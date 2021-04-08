@@ -1,4 +1,4 @@
-package data
+package pokedata
 
 // Stats represent the 6 main pokemon stats
 type Stats struct {
