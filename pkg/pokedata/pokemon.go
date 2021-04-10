@@ -17,20 +17,20 @@ type PokeDexItem struct {
 
 	Stats Stats `json:"baseStats"`
 
-	PreEvolution       string `json:"prevo"`
-	EvolutionLevel     int    `json:"evoLevel"`
-	EvolutionType      string `json:"evoType"`
-	EvolutionItem      string `json:"evoItem"`
-	EvolutionCondition string `json:"evoCondition"`
-	IsNonstandard      string `json:"isNonstandard"`
+	PreEvolution       string   `json:"prevo"`
+	EvolutionLevel     int      `json:"evoLevel"`
+	EvolutionType      string   `json:"evoType"`
+	EvolutionItem      string   `json:"evoItem"`
+	EvolutionCondition string   `json:"evoCondition"`
+	IsNonstandard      string   `json:"isNonstandard"`
+	CosmeticFormes     []string `json:"cosmeticFormes"`
+	RequiredAbility    string   `json:"requiredAbility"`
 
-	// used for mega evos
 	OtherFormes  []string `json:"otherFormes"`
 	FormeOrder   []string `json:"formeOrder"`
 	RequiredItem string   `json:"requiredItem"`
 	BaseSpecies  string   `json:"baseSpecies"`
 
-	// used for arceus .. as far as I can tell
 	Forme         string   `json:"forme"`
 	Gender        string   `json:"gender"`
 	RequiredItems []string `json:"requiredItems"`
