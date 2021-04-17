@@ -10,6 +10,7 @@ import (
 // PokemonSpec represents a pokemon with battle relevant stats, items, moves etc as specified in order to *start* a battle.
 // Pokemon returned during battle have different derived fields.
 type PokemonSpec struct {
+	ID               string   `json:"id"`
 	Name             string   `json:"name"`
 	Species          string   `json:"species"`
 	Item             string   `json:"item"`

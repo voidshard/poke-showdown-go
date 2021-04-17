@@ -10,8 +10,10 @@ import (
 // stream treats the showdown simulator as an bidirectional event stream
 // (as it is intended).
 type stream struct {
-	proc *parse.Process
-	out  chan *Update
+	proc  *parse.Process
+	out   chan *Update
+	idmap map[string]map[string]string
+	spec  *BattleSpec
 }
 
 // Write some battle instruction to the simulator
@@ -68,10 +70,17 @@ func NewSimulatorStream(spec *BattleSpec) (SimulatorStream, error) {
 		return nil, err
 	}
 
-	ss := &stream{proc: proc, out: make(chan *Update)}
+	ss := &stream{
+		proc:  proc,
+		out:   make(chan *Update),
+		idmap: map[string]map[string]string{},
+		spec:  spec,
+	}
 	go func() {
 		for m := range proc.Messages() {
-			ss.out <- toUpdate(m)
+			delta := toUpdate(m)
+			ss.fillIDs(delta)
+			ss.out <- delta
 
 			if m.Event != nil {
 				if m.Event.Type == event.Win {
@@ -83,6 +92,46 @@ func NewSimulatorStream(spec *BattleSpec) (SimulatorStream, error) {
 	}()
 
 	return ss, nil
+}
+
+// fillIDs is where we match showdown returned pokemon to IDs
+// that we accept in PokemonSpec
+func (s *stream) fillIDs(u *Update) {
+	if u.Side == nil {
+		return
+	}
+
+	pokes, ok := s.idmap[u.Side.Player]
+	if !ok {
+		// if this is the first side update message then
+		// the order in which we gave pokemon (spec) is
+		// the order if which they're returned
+		pokes = map[string]string{}
+		pidx := playerIndex(u.Side.Player)
+
+		for i, p := range u.Side.Pokemon {
+			givenID := s.spec.Players[pidx][i].ID
+			pokes[p.Ident] = givenID
+			p.ID = givenID
+		}
+
+		s.idmap[u.Side.Player] = pokes
+	} else {
+		for _, p := range u.Side.Pokemon {
+			givenID, _ := pokes[p.Ident]
+			p.ID = givenID
+		}
+	}
+}
+
+// playerIndex returns a players spec index from their ID
+func playerIndex(name string) int {
+	switch name {
+	case "p2":
+		return 1
+	default:
+		return 0
+	}
 }
 
 // toUpdate parses the given message to an update (we do this

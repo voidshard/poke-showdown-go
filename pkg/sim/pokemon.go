@@ -9,6 +9,8 @@ import (
 
 // Pokemon is the final struct that amasses all the data we can manage to find.
 type Pokemon struct {
+	ID string
+
 	// Unique 'player: name' string for pokemon
 	Ident string
 

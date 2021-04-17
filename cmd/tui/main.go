@@ -4,6 +4,7 @@ Code in here should not be relied on and is at best simply a rough sketch of how
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -33,6 +34,14 @@ func main() {
 	teamb, err := pokeutils.RandomTeam()
 	if err != nil {
 		panic(err)
+	}
+
+	// set some IDs for the lols
+	for i, p := range teama {
+		p.ID = fmt.Sprintf("teama-%d", i)
+	}
+	for i, p := range teamb {
+		p.ID = fmt.Sprintf("teamb-%d", i)
 	}
 
 	game, err := newGame(&sim.BattleSpec{
